@@ -3,7 +3,7 @@ import asyncio
 import configparser
 from telethon import TelegramClient, events
 
-from utils import download_message_media, read_file, append_line_to_file, get_dict_from_message
+from utils import download_file_from_media, read_file, get_dict_from_message
 
 
 config = configparser.ConfigParser()
@@ -48,7 +48,7 @@ async def handle_event(event):
             msg_dict = await get_dict_from_message(chat_id, message)
             if msg_dict is not None:
                 # Tải file từ message
-                file_path = await download_message_media(client, chat_id, msg_dict, download_dir)
+                file_path = await download_file_from_media(client, chat_id, msg_dict, download_dir)
                 # Thêm độ trễ 1 giây giữa mỗi lần tải file
                 await asyncio.sleep(1)
                 if file_path:

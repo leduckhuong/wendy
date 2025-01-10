@@ -81,23 +81,19 @@ def check_file_in_history(history_file, path):
 # Hàm kiểm tra xem file có đúng định dạng được chỉ định không, nếu không chỉ định extension nào sẽ chấp nhận mọi kiểu file
 file_extensions = ['.txt']
 def check_file_valid(file):
-    if len(file_extensions) == 0:
-        return True
     _, file_extension = os.path.splitext(file)
     return file_extension in file_extensions
 
 
 # Đọc file YAML để lấy các quy tắc regex
 rules_file='./line_rules.yaml'
-def load_rules_from_yaml():
-    with open(rules_file, 'r') as file:
+def load_rules_from_yaml(rule_path):
+    with open(rule_path, 'r') as file:
         rules = yaml.safe_load(file)
     return rules['line_rules']
 
 # Hàm kiểm tra định dạng của line
-def check_line_format(line):
-    # Tải các quy tắc từ file YAML
-    rules = load_rules_from_yaml()
+def check_line_format(rules, line):
 
     # Duyệt qua từng quy tắc trong danh sách
     for rule in rules:
@@ -378,39 +374,6 @@ async def extract_file(file_path, extract_file_path):
         path_file_extract = await extract_7z(file_path, extract_file_path)
     return list(path_file_extract)
 
-
-# Hàm lấy entity của một đoạn chat
-async def get_channel_entity(client, chat_id):
-    
-    try:
-        if check_chat_type(chat_id):
-            # Remove the -100 prefix if present
-            if str(chat_id).startswith('-100'):
-                chat_id = int(str(chat_id)[4:])
-            print(f'Attempting to access channel with ID: {chat_id}')
-            
-            # Try getting the channel directly
-            chat = await client.get_entity(PeerChannel(chat_id))
-            
-            return chat
-        else:
-            chat = await client.get_entity(int(chat_id))
-            return chat
-        
-    except ValueError as e:
-        print(f'ValueError: {str(e)}')
-        raise
-    except ChannelPrivateError:
-        print('This is a private channel. Please make sure you have joined it.')
-        raise
-    except ChannelInvalidError:
-        print('This channel is invalid or not accessible.')
-        raise
-    except Exception as e:
-        print(f'Error accessing channel: {str(e)}')
-        raise
-
-
 # Hàm trả về message kiểu dict
 history_downloaded = './history_downloaded.txt'
 async def get_dict_from_message(chat_id, message):
@@ -448,7 +411,7 @@ async def progress_callback(current, total):
 
 
 # Hàm tải file 
-async def download_message_media(client, chat_id, message, download_dir='./storage'):
+async def download_file_from_media(client, chat_id, message, download_dir='./storage'):
     try:
         # Tạo storage nếu không tồn tại 
         os.makedirs(download_dir, exist_ok=True)
@@ -481,24 +444,25 @@ async def download_message_media(client, chat_id, message, download_dir='./stora
                     break
         
         if not file_name:
-            file_name = f'document_{message['id']}'
-            
-        download_path = os.path.join(download_dir, file_name)
-        print(f'Downloading file: {file_name}')
-        # Download using original message object
-        file_path = await client.download_media(
-            original_message.media,
-            file=download_path,
-            progress_callback=progress_callback
-        )
-        
-        if file_path:
-            # print(f'Successfully downloaded to: {file_path}')
-            append_line_to_file('./history_downloaded.txt', file_name)
-            return file_path
-        else:
-            print(f'Download failed for: {file_name}')
             return None
+            
+        if check_file_valid(file_name):
+            download_path = os.path.join(download_dir, file_name)
+            print(f'Downloading file: {file_name}')
+            # Download using original message object
+            file_path = await client.download_media(
+                original_message.media,
+                file=download_path,
+                progress_callback=progress_callback
+            )
+            
+            if file_path:
+                # print(f'Successfully downloaded to: {file_path}')
+                append_line_to_file('./history_downloaded.txt', file_name)
+                return file_path
+            else:
+                print(f'Download failed for: {file_name}')
+                return None
             
     except Exception as e:
         print(f'Error during download: {str(e)}')
@@ -530,8 +494,10 @@ async def read_file(chat_id , path):
                                 with open(path, 'r') as file_txt:
                                     for line in file_txt:
                                         line = line.strip()
-                                        
-                                        line_match = check_line_format(line)
+
+                                        # Tải các quy tắc từ file YAML
+                                        rules = load_rules_from_yaml(rules_file)
+                                        line_match = check_line_format(rules, line)
                                         if line_match[0]=='rule1':
                                             print('Matched rule 1')
                                             print('URL:', line_match[1].group(1))
@@ -556,24 +522,24 @@ async def read_file(chat_id , path):
                                             print('Password:', line_match[1].group(2))
                                             # await save_data(chat_id, path, '', mail, password, '', '')
                 
-                            # elif file_format == 2:
-                            #     with open(path) as file:
-                            #         content = file.read()  
-                            #         block = content.split('\n\n')  
-                            #         for item in block:
-                            #             url, mail, password = '','',''
-                            #             lines_item = item.split('\n')
-                            #             for line_item in lines_item:
-                            #                 pos1 = line_item.find(':')
-                            #                 if 'url' in line_item:
-                            #                     url = line_item[pos1+1:]
-                            #                 if 'login' in line_item:
-                            #                     mail = line_item[pos1+1:]
-                            #                 if 'password' in line_item:
-                            #                     password = line_item[pos1+1:]
-                            #             print('Url: ', url)
-                            #             print('Mail: ', mail)
-                            #             print('Password: ', password)
+                            elif file_format == 2:
+                                with open(path) as file:
+                                    content = file.read()  
+                                    block = content.split('\n\n')  
+                                    for item in block:
+                                        url, mail, password = '','',''
+                                        lines_item = item.split('\n')
+                                        for line_item in lines_item:
+                                            pos1 = line_item.find(':')
+                                            if 'url' in line_item:
+                                                url = line_item[pos1+1:]
+                                            if 'login' in line_item:
+                                                mail = line_item[pos1+1:]
+                                            if 'password' in line_item:
+                                                password = line_item[pos1+1:]
+                                        print('Url: ', url)
+                                        print('Mail: ', mail)
+                                        print('Password: ', password)
                 
                             # elif file_format == 3:
                             #     with open(path) as file:

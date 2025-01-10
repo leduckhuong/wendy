@@ -39,6 +39,7 @@ await client.add_participant('group_username', 'user_username')
 
 ==============
 // Chạy bất đồng bộ
+
 with client:
     client.run_until_disconnected()
 
