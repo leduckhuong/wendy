@@ -1,0 +1,11 @@
+# rules.yaml - Quy tắc lọc dữ liệu sử dụng regex
+
+line_rules:
+    # http://test.com:user:pass
+    - rule1: ^(http://[^\s:]+|https://[^\s:]+|apk://[^\s:]+|chrome://[^\s:]+):([^\s:]+):([^\s:]+$)
+    # http://test.com user:pass
+    - rule2: ^(http://[^\s:]+|https://[^\s:]+|apk://[^\s:]+|chrome://[^\s:]+)\s+([^\s:]+):([^\s:]+$)
+    # user:pass http://test.com
+    - rule3: ^(\S+):(\S+)\s+(http://[^\s:]+$|https://[^\s:]+$|apk://[^\s:]+$|chrome://[^\s:]+$)
+    # user:pass
+    - rule4: ^(\S+):(\S+)

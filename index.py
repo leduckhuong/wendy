@@ -1,14 +1,10 @@
-from telethon import TelegramClient, events
+import asyncio
 
-api_id = 29117059
-api_hash = '9ec5fb255a295e7a8bf507c9a7922efe'
-session_name = '@mrhellomeo'
-
-client = TelegramClient(session_name, api_id, api_hash)
+from telegram_listener import client
 
 async def main():
-    await client.start()
-    print('Connected succesfull')
-    await client.disconnect()
+    await client.start()    # Bắt đầu đăng nhập
+    
+    await client.run_until_disconnected()   # Lắng nghe liên tục từ telegram
 
-client.loop.run_until_complete(main)
+asyncio.run(main())
