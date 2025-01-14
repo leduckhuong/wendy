@@ -15,11 +15,13 @@ api_hash = config['TELE_API']['HASH_ID']
 phone = config['TELE_API']['PHONE']
 username = config['TELE_API']['USERNAME']
 
+session_dir = './sessions'
+
 # Đảm bảo thư mục session tồn tại
-os.makedirs('./sessions', exist_ok=True)
+os.makedirs(session_dir, exist_ok=True)
 
 # Tạo client Telegram với đường dẫn lưu session file
-session_file = './sessions/' + username
+session_file = f'{session_dir}/{username}'
 client = TelegramClient(session_file, api_id, api_hash)
 
 os.makedirs('./storage', exist_ok=True)
@@ -46,7 +48,7 @@ async def handle_event(event):
         if chat_id is not None:
             # Chuyển message từ kiểu instance sang kiểu dictionary
             msg_dict = await get_dict_from_message(chat_id, message)
-            if msg_dict is not None:
+            if msg_dict is not None and msg_dict['type'] == 'download':
                 # Tải file từ message
                 file_path = await download_file_from_media(client, chat_id, msg_dict, download_dir)
                 # Thêm độ trễ 1 giây giữa mỗi lần tải file

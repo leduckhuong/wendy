@@ -392,7 +392,7 @@ async def get_dict_from_message(chat_id, message):
         if not check_file_in_history(history_downloaded, file_name):
             msg_dict = message.to_dict()
             msg_dict['file_name'] = file_name
-            
+            msg_dict['type'] = 'download'
             if hasattr(message.peer_id, 'user_id'):
                 msg_dict['user_id'] = chat_id
             elif hasattr(message.peer_id, 'chat_id'):
@@ -401,8 +401,11 @@ async def get_dict_from_message(chat_id, message):
                 msg_dict['channel_id'] = chat_id
             return msg_dict
         print(f'File {file_name} alreadys exist')
-        return None
-
+    elif message.media and hasattr(message.media, 'webpage') and message.media.webpage:
+        msg_dict = message.to_dict()
+        msg_dict['type'] = 'link'
+        return msg_dict
+    return None
 
 # Hàm callback trả về % quá trình tải file
 async def progress_callback(current, total):
@@ -470,9 +473,18 @@ async def download_file_from_media(client, chat_id, message, download_dir='./sto
         print('Full error:', traceback.format_exc())
         return None
 
+link_rules='./link_rules.yaml'
+async def get_room_link_from_message(message):
+    url = message['media']['webpage']['url']
+    print(f"URL: {url}")
+    rules = load_rules_from_yaml(link_rules)
+    matches = check_line_format(rules, url)
+    if matches:
+        print(matches.group(1))
+    
 
 # Hàm đọc file
-async def read_file(chat_id , path):
+def read_file(chat_id , path):
     try:
         if os.path.isfile(path):
             print('read_file file is file')
@@ -593,6 +605,37 @@ async def read_file(chat_id , path):
         print(f'Error: {e}')
         return None
 
+# Hàm lấy entity của một đoạn chat
+async def get_channel_entity(client, chat_id):
+    
+    try:
+        if check_chat_type(chat_id):
+            # Remove the -100 prefix if present
+            if str(chat_id).startswith('-100'):
+                chat_id = int(str(chat_id)[4:])
+            print(f'Attempting to access channel with ID: {chat_id}')
+            
+            # Try getting the channel directly
+            chat = await client.get_entity(PeerChannel(chat_id))
+            
+            return chat
+        else:
+            chat = await client.get_entity(int(chat_id))
+            return chat
+        
+    except ValueError as e:
+        print(f'ValueError: {str(e)}')
+        raise
+    except ChannelPrivateError:
+        print('This is a private channel. Please make sure you have joined it.')
+        raise
+    except ChannelInvalidError:
+        print('This channel is invalid or not accessible.')
+        raise
+    except Exception as e:
+        print(f'Error accessing channel: {str(e)}')
+        raise
+
 # Nhóm hàm đọc file 
 # Đọc file xlsx
 def read_table_xlsx(path):
@@ -645,8 +688,8 @@ async def save_data(channel, filename, url, user, password, name, phone):
 
 # Kết nối MongoDB
 client = MongoClient(config['MONGO_API']['M0NGO_URI'])
-db = client[config['MONGO_API']['MONGO_DB']]
-collection = db[config['MONGO_API']['MONGO_CL']]
+db = client[config['MONGO_API']['MONGO_DB_DEV']]
+collection = db[config['MONGO_API']['MONGO_CL_DATA']]
 
 # Hàm lưu dữ liệu
 async def save_data(channel, filename, url, user, password, name, phone):

@@ -3,7 +3,7 @@ import asyncio
 import configparser
 from telethon import TelegramClient, events
 
-from utils import load_rules_from_yaml, check_line_format
+from utils import get_dict_from_message, get_room_link_from_message
 
 
 config = configparser.ConfigParser()
@@ -27,20 +27,29 @@ os.makedirs('./links', exist_ok=True)
 history_read = './links.txt'
 
 
-# Đọc file YAML để lấy các quy tắc regex
-link_rules='./link_rules.yaml'
 
 @client.on(events.NewMessage)
 async def handle_event(event):
     try:
         message = event.message
-        if message.media and hasattr(message.media, 'webpage') and message.media.webpage:
-            url = message.media.webpage.url
-            print(f"URL: {url}")
-            rules = load_rules_from_yaml(link_rules)
-            matches = check_line_format(rules, url)
-            if matches:
-                print(matches[1].group(0))
+
+        # Lấy id đoạn chat
+
+        chat_id = None
+
+        if hasattr(message.peer_id, 'user_id'):
+            chat_id = message.peer_id.user_id
+        if hasattr(message.peer_id, 'chat_id'):
+            chat_id = message.peer_id.chat_id
+        if hasattr(message.peer_id, 'channel_id'):
+            chat_id = message.peer_id.channel_id
+        print(f'Chat id: {chat_id}')
+
+        if chat_id is not None:
+            # Chuyển message từ kiểu instance sang kiểu dictionary
+            msg_dict = await get_dict_from_message(chat_id, message)
+            if msg_dict is not None and msg_dict['type'] == 'link':
+                await get_room_link_from_message(msg_dict)
     except Exception as e:
         print(f'Error in event handler: {str(e)}')
         import traceback
