@@ -2,8 +2,9 @@ import os
 import asyncio
 import configparser
 from telethon import TelegramClient, events
+from telethon.tl.types import MessageMediaDocument
 
-from utils import download_file_from_media, read_file, get_dict_from_message
+from utils import get_file_hash_before_download, check_file_in_history, download_file_from_media, read_file
 
 
 config = configparser.ConfigParser()
@@ -16,18 +17,17 @@ phone = config['TELE_API']['PHONE']
 username = config['TELE_API']['USERNAME']
 
 session_dir = './sessions'
-
-# Đảm bảo thư mục session tồn tại
 os.makedirs(session_dir, exist_ok=True)
 
 # Tạo client Telegram với đường dẫn lưu session file
 session_file = f'{session_dir}/{username}'
 client = TelegramClient(session_file, api_id, api_hash)
 
-os.makedirs('./storage', exist_ok=True)
-
 download_dir = './storage'
+os.makedirs(download_dir, exist_ok=True)
+
 history_read = './history_read.txt'
+history_downloaded = './history_downloaded.txt'
 
 @client.on(events.NewMessage)
 async def handle_event(event):
@@ -46,19 +46,19 @@ async def handle_event(event):
             chat_id = message.peer_id.channel_id
 
         if chat_id is not None:
-            # Chuyển message từ kiểu instance sang kiểu dictionary
-            msg_dict = await get_dict_from_message(chat_id, message)
-            if msg_dict is not None and msg_dict['type'] == 'download':
-                # Tải file từ message
-                file_path = await download_file_from_media(client, chat_id, msg_dict, download_dir)
+            # Nếu message là file thì xử lý trong block if bên dưới
+            if isinstance(message.media, MessageMediaDocument):
+                file_hash = await get_file_hash_before_download(client, message)
+                if file_hash is None:
+                    return 
+                if check_file_in_history(history_downloaded, file_hash):
+                    return
+                file_path = await download_file_from_media(client, message, download_dir, file_hash)
                 # Thêm độ trễ 1 giây giữa mỗi lần tải file
                 await asyncio.sleep(1)
                 if file_path:
-                    print(f"Downloaded successfully: {file_path}")
                     # Đọc file
-                    await read_file(chat_id ,file_path)
-                    # Đánh dấu đã đọc
-                    print(f"Read successfully: {file_path}")
+                    await read_file(file_path)
                 else:
                     print("Downloaded failed")# Tải file về
                 
