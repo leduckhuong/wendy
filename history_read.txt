@@ -1,2 +1,0 @@
-./storage/c3ed0819d87d668102227534ca963c4f-text.txt
-./storage/2c62b7a496bd9e19cebe87a207bf4b92-text2.txt

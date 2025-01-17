@@ -299,6 +299,7 @@ async def read_file(file_path):
                  
                         append_line_to_file(history_read, file_path)
                         result = True
+                        os.remove(file_path)
             else:  
                 # Đường dẫn giải nén
                 extract_dir = './storage/'
