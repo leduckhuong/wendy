@@ -99,7 +99,7 @@ def check_file_in_history(history_file, file_hash):
 
 
 # Hàm kiểm tra xem file có đúng định dạng được chỉ định không, nếu không chỉ định extension nào sẽ chấp nhận mọi kiểu file
-file_extensions = ['.txt', '.zip', '.7z', '.rar']
+file_extensions = ['.txt', '.xlsx', '.csv', '.zip', '.7z', '.rar']
 def check_valid_file_extension(file):
     _, file_extension = os.path.splitext(file)
     return file_extension in file_extensions
@@ -284,22 +284,20 @@ async def read_file(file_path):
                     return None
                 _, file_extension = os.path.splitext(file_path)
                 if file_extension == '.txt':
-                        with open(file_path, 'r') as file_txt:
-                            for line in file_txt:
-                                line = line.strip()
-                                doc = {
-                                    "text": line,
-                                    "timestamp": datetime.now(),
-                                }
-                                try:
-                                    response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
-                                    print(f'Response elastic: {response_elastic}')
-                                except Exception as e:
-                                    print(f"Error indexing document: {e}")
-                 
-                        append_line_to_file(history_read, file_path)
-                        result = True
-                        os.remove(file_path)
+                    read_file_txt(file_path, elastic_client)
+                    append_line_to_file(history_read, file_path)
+                    result = True
+                    os.remove(file_path)
+                elif file_extension == '.xlsx':
+                    read_table_xlsx(file_path, elastic_client)
+                    append_line_to_file(history_read, file_path)
+                    result = True
+                    os.remove(file_path)
+                elif file_extension == '.csv':
+                    read_table_csv(file_path, elastic_client)
+                    append_line_to_file(history_read, file_path)
+                    result = True
+                    os.remove(file_path)
             else:  
                 # Đường dẫn giải nén
                 extract_dir = './storage/'
@@ -332,35 +330,64 @@ async def read_file(file_path):
         elastic_client.close()
         return result
 # Nhóm hàm đọc file 
+
+def read_file_txt(file_path, elastic_client):
+    try: 
+        with open(file_path, 'r') as file_txt:
+            for line in file_txt:
+                line = line.strip()
+                doc = {
+                    "text": line,
+                    "timestamp": datetime.now(),
+                }
+                response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
+                print(f'Response elastic: {response_elastic}')
+    except Exception as e:
+        print(f"Error indexing document: {e}")
+
 # Đọc file xlsx
-def read_table_xlsx(path):
-    workbook = load_workbook(filename=path, data_only=True)
-    sheet = workbook.active  # Hoặc bạn có thể chỉ định sheet cụ thể
-
-    columns = [cell.value for cell in sheet[1]]
-
-    require_columns = ['CUSTOMER_NAME', 'BIRTH_DATE', 'PHONE', 'EMAIL', 'PASSWORD']
-    valid_columns = [col for col in columns if col in require_columns]
-
-    if valid_columns:
-    
-        for row in sheet.iter_rows(min_row=2, values_only=True): 
-            row_data = {col: row[i] for i, col in enumerate(columns) if col in valid_columns}
-
-            if row_data['EMAIL'] is not None:
-                if check_custom_mail(row_data['EMAIL']):
-                    if 'BIRTH_DATE' in row_data and isinstance(row_data['BIRTH_DATE'], datetime):
-                        row_data['BIRTH_DATE'] = row_data['BIRTH_DATE'].strftime('%d/%m/%Y')
-                    print(row_data)
-    else:
-        print('Không có cột nào trong danh sách yêu cầu tồn tại trong file.')
+def read_table_xlsx(file_path, elastic_client):
+    try:
+        workbook = load_workbook(filename=file_path, data_only=True)
+        
+        sheet = workbook.active
+        
+        columns = [cell.value for cell in sheet[1]]
+        
+        
+        # Đọc và in dữ liệu từ các hàng
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            doc = dict(zip(columns, row))
+            response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
+            print(f'Response elastic: {response_elastic}')
+            
+        workbook.close()
+        return True
+    except FileNotFoundError:
+        print(f"Không tìm thấy file: {file_path}")
+        return None
+    except Exception as e:
+        print(f"Có lỗi xảy ra: {str(e)}")
+        return None
 
 # Đọc file csv
-def read_table_csv(path):
-    with open(path, mode='r') as file:
-        reader = csv.reader(file)
-        for row in reader:
-            print(row)
+def read_table_csv(file_path, elastic_client):
+    try:
+        with open(file_path, mode='r') as file:
+            reader = csv.reader(file)
+            headers = next(reader)
+            for row in reader:
+                # Tạo dictionary từ header và dữ liệu
+                doc = dict(zip(headers, row))
+                response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
+                print(f'Response elastic: {response_elastic}')
+        return True
+    except FileNotFoundError:
+        print(f"Không tìm thấy file: {file_path}")
+        return None
+    except Exception as e:
+        print(f"Có lỗi xảy ra: {str(e)}")
+        return None
 
 
 # Hàm lưu dữ liệu
