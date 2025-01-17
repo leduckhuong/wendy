@@ -1,16 +1,19 @@
 import os
 import pyzipper
-import rarfile
-import py7zr
+import rarfile # type: ignore
+import py7zr # type: ignore
 from datetime import datetime
 import configparser
 import hashlib
+import uuid
+import re
+import yaml
 
 from openpyxl import load_workbook
 import csv
 
 from datetime import datetime
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch # type: ignore
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -96,7 +99,7 @@ def check_file_in_history(history_file, file_hash):
 
 
 # Hàm kiểm tra xem file có đúng định dạng được chỉ định không, nếu không chỉ định extension nào sẽ chấp nhận mọi kiểu file
-file_extensions = ['.txt', '.zip']
+file_extensions = ['.txt', '.zip', '.7z', '.rar']
 def check_valid_file_extension(file):
     _, file_extension = os.path.splitext(file)
     return file_extension in file_extensions
@@ -131,29 +134,31 @@ async def rename_extract_file(extract_file_path, new_files):
 
     return renamed_files
 
-
-# Nhóm hàm extract file
-async def extract_zip(zip_file_path, extract_dir, password=None):
+async def extract_file(file_path, extract_dir, password=None):
     try:
-        # Tạo thư mục đích nếu chưa có
         os.makedirs(extract_dir, exist_ok=True)
-
-        # Lấy danh sách các tệp và thư mục trước khi giải nén
+        _, file_extension = os.path.splitext(file_path)
         before_extract = set(os.listdir(extract_dir))
 
-        # Giải nén vào thư mục đích
-        with pyzipper.AESZipFile(zip_file_path, 'r') as zip_ref:
-            if password:
-                zip_ref.extractall(extract_dir, pwd=password.encode('utf-8'))
-            else:
-                zip_ref.extractall(extract_dir)
+        if (file_extension == '.zip'):   
+            with pyzipper.AESZipFile(file_path, 'r') as zip_ref:
+                if password:
+                    zip_ref.extractall(extract_dir, pwd=password.encode('utf-8'))
+                else:
+                    zip_ref.extractall(extract_dir)
+        if (file_extension == '.rar'):
+            with rarfile.RarFile(file_path, 'r') as rar_ref:
+                if password:
+                    rar_ref.extractall(extract_dir, pwd=password)
+                else:
+                    rar_ref.extractall(extract_dir)
+        if (file_extension == '.7z'):
+            with py7zr.SevenZipFile(file_path, mode='r', password=password) as archive:
+                archive.extractall(path=extract_dir)
 
-        # Lấy danh sách các tệp và thư mục sau khi giải nén
         after_extract = set(os.listdir(extract_dir))
 
-        # Tìm sự khác biệt giữa hai danh sách: các tệp mới giải nén
         new_files = after_extract - before_extract
-        print(f'New extract file: {new_files}')
 
         # Đổi tên file 
         renamed_files = []
@@ -174,7 +179,7 @@ async def extract_zip(zip_file_path, extract_dir, password=None):
                 for root, _, files in os.walk(item_path):
                     for file_name in files:
                         old_file_path = os.path.join(root, file_name)
-                        # Lấy kích thước file
+                        # Lấy mã băm file
                         file_hash = get_file_hash_after_download(old_file_path)
                         # Tạo tên file mới
                         new_file_name = f'{file_hash}-{file_name}'
@@ -190,155 +195,11 @@ async def extract_zip(zip_file_path, extract_dir, password=None):
             if check_file_in_history(history_read, file_hash):
                 print(f'Extract file zip file_path: {file_path}')
                 os.remove(f'./storage/{file_path}')
-        return renamed_files
-
-    except RuntimeError as e:
-        if 'password required' in str(e).lower():
-            print('This zip file requires a password.')
-        elif 'bad password' in str(e).lower():
-            print('The password is incorrect.')
-        else:
-            print(f'RuntimeError: {str(e)}')
+        return list(renamed_files)
+        
     except Exception as e:
         print(f'Error: {str(e)}')
-    print('Can not extract zip file')
     return None
-
-async def extract_rar(rar_file_path, extract_file_path, password=None):
-    try:
-        os.makedirs(extract_file_path, exist_ok=True)
-        
-        before_extract = set(os.listdir(extract_file_path))
-
-        with rarfile.RarFile(rar_file_path, 'r') as rar_ref:
-            if password:
-                rar_ref.extractall(extract_file_path, pwd=password)
-            else:
-                rar_ref.extractall(extract_file_path)
-
-        # print('Extract successful')
-
-        # Lấy danh sách các tệp và thư mục sau khi giải nén
-        after_extract = set(os.listdir(extract_file_path))
-
-        # Tìm sự khác biệt giữa hai danh sách: các tệp mới giải nén
-        new_files = after_extract - before_extract
-
-        # Đổi tên file 
-        renamed_files = []
-        for item in new_files:
-            item_path = os.path.join(extract_file_path, item)
-
-            if os.path.isfile(item_path):  # Nếu là file
-                file_size = str(os.path.getsize(item_path)) 
-                # Đổi tên file
-                new_name = f'{file_size}-{item_path}'
-                new_path = os.path.join(extract_file_path, new_name)
-                os.rename(item_path, new_path)
-                renamed_files.append(new_name)
-            
-            elif os.path.isdir(item_path):  # Nếu là thư mục
-                # Đổi tên các file bên trong thư mục
-                for root, _, files in os.walk(item_path):
-                    for file_name in files:
-                        old_file_path = os.path.join(root, file_name)
-                        # Lấy kích thước file
-                        file_size = os.path.getsize(old_file_path)
-                        # Tạo tên file mới
-                        new_file_name = f'{file_size}-{file_name}'
-
-                        new_file_path = os.path.join(root, new_file_name)
-                        os.rename(old_file_path, new_file_path)
-                        renamed_files.append(os.path.relpath(new_file_path, extract_file_path))
-        
-        print(f'Extract file zip renamed_files: {renamed_files}')
-
-        for file_path in renamed_files:
-            if check_file_in_history(history_read, file_hash):
-                print(f'Extract file zip file_path: {file_path}')
-                os.remove(f'./storage/{file_path}')
-
-        # os.remove(zip_file_path)
-        return renamed_files
-
-    except rarfile.BadRarFile as e:
-        print('The RAR file is corrupted.')
-    except rarfile.RarWrongPassword:
-        print('The password is incorrect.')
-    except Exception as e:
-        print(f'Error: {str(e)}')
-
-async def extract_7z(sevenz_file_path, extract_file_path, password=None):
-    try:
-        os.makedirs(extract_file_path, exist_ok=True)
-        with py7zr.SevenZipFile(sevenz_file_path, mode='r', password=password) as archive:
-            archive.extractall(path=extract_file_path)
-
-        # print('Extract successful')
-
-        # Lấy danh sách các tệp và thư mục sau khi giải nén
-        after_extract = set(os.listdir(extract_file_path))
-
-        # Tìm sự khác biệt giữa hai danh sách: các tệp mới giải nén
-        new_files = after_extract - before_extract
-        
-        # Đổi tên file 
-        renamed_files = []
-        for item in new_files:
-            item_path = os.path.join(extract_file_path, item)
-
-            if os.path.isfile(item_path):  # Nếu là file
-                file_size = str(os.path.getsize(item_path)) 
-                # Đổi tên file
-                new_name = f'{file_size}-{item_path}'
-                new_path = os.path.join(extract_file_path, new_name)
-                os.rename(item_path, new_path)
-                renamed_files.append(new_name)
-            
-            elif os.path.isdir(item_path):  # Nếu là thư mục
-                # Đổi tên các file bên trong thư mục
-                for root, _, files in os.walk(item_path):
-                    for file_name in files:
-                        old_file_path = os.path.join(root, file_name)
-                        # Lấy kích thước file
-                        file_size = os.path.getsize(old_file_path)
-                        # Tạo tên file mới
-                        new_file_name = f'{file_size}-{file_name}'
-
-                        new_file_path = os.path.join(root, new_file_name)
-                        os.rename(old_file_path, new_file_path)
-                        renamed_files.append(os.path.relpath(new_file_path, extract_file_path))
-        
-        print(f'Extract file zip renamed_files: {renamed_files}')
-
-        for file_path in renamed_files:
-            if check_file_in_history(history_read, file_hash):
-                print(f'Extract file zip file_path: {file_path}')
-                os.remove(f'./storage/{file_path}')
-
-        # os.remove(zip_file_path)
-        return renamed_files
-
-    except py7zr.Bad7zFile:
-        print('The 7z file is corrupted.')
-    except RuntimeError as e:
-        if 'incorrect password' in str(e).lower():
-            print('The password is incorrect.')
-        else:
-            print(f'RuntimeError: {str(e)}')
-    except Exception as e:
-        print(f'Error: {str(e)}')
-
-async def extract_file(file_path, extract_dir):
-    _, file_extension = os.path.splitext(file_path)
-    path_file_extract = None
-    if (file_extension == '.zip'):
-        path_file_extract = await extract_zip(file_path, extract_dir)
-    if (file_extension == '.rar'):
-        path_file_extract = await extract_rar(file_path, extract_dir)
-    if (file_extension == '.7z'):
-        path_file_extract = await extract_7z(file_path, extract_dir)
-    return list(path_file_extract)
 
 # Hàm callback trả về % quá trình tải file
 async def progress_callback(current, total):
@@ -374,8 +235,26 @@ async def download_file_from_media(client, message, download_dir, file_hash):
         import traceback
         print('Full error:', traceback.format_exc())
         return None
+    
+# Hàm kiểm tra định dạng của line
+def check_line_format(rules, line):
 
-link_rules='./link_rules.yaml'
+    # Duyệt qua từng quy tắc trong danh sách
+    for rule in rules:
+        for rule_name, rule_pattern in rule.items():
+            x = re.match(rule_pattern, line) 
+            if x:
+                return [rule_name, x]  # Trả về tên quy tắc đã khớp
+    
+    print('Not matching rule')
+    return None  # Không có quy tắc nào khớp
+
+def load_rules_from_yaml(rule_path):
+    with open(rule_path, 'r') as file:
+        rules = yaml.safe_load(file)
+    return rules['line_rules']
+
+link_rules='./rules/link_rules.yaml'
 async def get_room_link_from_message(message):
     url = message['media']['webpage']['url']
     print(f"URL: {url}")
@@ -388,6 +267,13 @@ async def get_room_link_from_message(message):
 # Hàm đọc file
 async def read_file(file_path):
     try:
+        result = None
+        elastic_client = Elasticsearch(
+            [ELASTIC_URL],
+            api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
+            verify_certs=True,
+            ca_certs=ELASTIC_API_CACERT
+        )
         if os.path.isfile(file_path):
 
             if not check_compress_file(file_path):
@@ -401,23 +287,18 @@ async def read_file(file_path):
                         with open(file_path, 'r') as file_txt:
                             for line in file_txt:
                                 line = line.strip()
-                                elastic_Client = Elasticsearch(
-                                    [ELASTIC_URL],
-                                    api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
-                                    verify_certs=True,
-                                    ca_certs=ELASTIC_API_CACERT
-                                )
                                 doc = {
                                     "text": line,
                                     "timestamp": datetime.now(),
                                 }
                                 try:
-                                    elastic_Client.index(index="telegram_index", id=1, document=doc)
+                                    response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
+                                    print(f'Response elastic: {response_elastic}')
                                 except Exception as e:
                                     print(f"Error indexing document: {e}")
                  
                         append_line_to_file(history_read, file_path)
-                        return True
+                        result = True
             else:  
                 # Đường dẫn giải nén
                 extract_dir = './storage/'
@@ -436,15 +317,19 @@ async def read_file(file_path):
                 os.remove(file_path)
                 print(f'File {file_path} has been processed and deleted.')
 
-    #     elif os.path.isdir(path):
-    #         for item in os.listdir(path):
-    #             item_path = os.path.join(path, item)
-    #             await read_file(chat_id, item_path)
-    #     return None
+        elif os.path.isdir(file_path):
+            for item in os.listdir(file_path):
+                item_path = os.path.join(file_path, item)
+                await read_file(item_path)
+                result = True
+            os.remove(file_path)
+            print(f'File {file_path} has been processed and deleted.')
+    
     except Exception as e:
         print(f'Error: {e}')
-        return None
-
+    finally:
+        elastic_client.close()
+        return result
 # Nhóm hàm đọc file 
 # Đọc file xlsx
 def read_table_xlsx(path):
