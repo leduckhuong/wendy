@@ -388,21 +388,3 @@ def read_table_csv(file_path, elastic_client):
     except Exception as e:
         print(f"Có lỗi xảy ra: {str(e)}")
         return None
-
-
-# Hàm lưu dữ liệu
-async def save_data(channel, filename, url, user, password, name, phone):
-    try:
-        if user != '' and password != '':
-            document = {'channel': channel, 'filename': filename, 'user': user, 'pass': password}
-            if url != '':
-                document['url'] = url 
-            if name != '':
-                document['name'] = name
-            if phone != '':
-                document['phone'] = phone
-            
-
-    except Exception as e:
-        print(f'Error: {e}')
-
