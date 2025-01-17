@@ -329,8 +329,8 @@ async def read_file(file_path):
     finally:
         elastic_client.close()
         return result
+    
 # Nhóm hàm đọc file 
-
 def read_file_txt(file_path, elastic_client):
     try: 
         with open(file_path, 'r') as file_txt:
@@ -388,3 +388,24 @@ def read_table_csv(file_path, elastic_client):
     except Exception as e:
         print(f"Có lỗi xảy ra: {str(e)}")
         return None
+
+# get id 
+async def get_room_id(client):
+    await client.start()    # Bắt đầu đăng nhập
+    
+    async for dialog in client.iter_dialogs():
+        entity = dialog.entity
+        name = dialog.name  
+        chat_id = dialog.id 
+
+        # Phân loại loại chat
+        if getattr(entity, 'broadcast', False):
+            print(f"Kênh (Channel): {name} (ID: {chat_id})")
+        elif getattr(entity, 'megagroup', False):
+            print(f"Nhóm (Group): {name} (ID: {chat_id})")
+        elif getattr(entity, 'bot', False):
+            print(f"Bot: {name} (ID: {chat_id})")
+        else:
+            print(f"Chat riêng (Private Chat): {name} (ID: {chat_id})")
+
+
