@@ -9,6 +9,8 @@ import uuid
 import re
 import yaml
 
+from telethon.tl.types import PeerChannel
+
 from openpyxl import load_workbook
 import csv
 
@@ -146,13 +148,13 @@ async def extract_file(file_path, extract_dir, password=None):
                     zip_ref.extractall(extract_dir, pwd=password.encode('utf-8'))
                 else:
                     zip_ref.extractall(extract_dir)
-        if (file_extension == '.rar'):
+        elif (file_extension == '.rar'):
             with rarfile.RarFile(file_path, 'r') as rar_ref:
                 if password:
                     rar_ref.extractall(extract_dir, pwd=password)
                 else:
                     rar_ref.extractall(extract_dir)
-        if (file_extension == '.7z'):
+        elif (file_extension == '.7z'):
             with py7zr.SevenZipFile(file_path, mode='r', password=password) as archive:
                 archive.extractall(path=extract_dir)
 
@@ -194,7 +196,8 @@ async def extract_file(file_path, extract_dir, password=None):
         for file_path in renamed_files:
             if check_file_in_history(history_read, file_hash):
                 print(f'Extract file zip file_path: {file_path}')
-                os.remove(f'./storage/{file_path}')
+                if os.path.exists(f'./storage/{file_path}'):
+                    os.remove(f'./storage/{file_path}')
         return list(renamed_files)
         
     except Exception as e:
@@ -263,6 +266,9 @@ async def get_room_link_from_message(message):
     if matches:
         print(matches.group(1))
     
+async def upload_data(doc, elastic_client):
+    response_elastic = await elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
+    print(f'Response elastic: {response_elastic}')
 
 # Hàm đọc file
 async def read_file(file_path):
@@ -284,19 +290,15 @@ async def read_file(file_path):
                     return None
                 _, file_extension = os.path.splitext(file_path)
                 if file_extension == '.txt':
-                    read_file_txt(file_path, elastic_client)
-                    append_line_to_file(history_read, file_path)
-                    result = True
-                    os.remove(file_path)
+                    await read_file_txt(file_path, elastic_client)
                 elif file_extension == '.xlsx':
-                    read_table_xlsx(file_path, elastic_client)
-                    append_line_to_file(history_read, file_path)
-                    result = True
-                    os.remove(file_path)
+                    await read_table_xlsx(file_path, elastic_client)
                 elif file_extension == '.csv':
-                    read_table_csv(file_path, elastic_client)
-                    append_line_to_file(history_read, file_path)
-                    result = True
+                    await read_table_csv(file_path, elastic_client)
+                append_line_to_file(history_read, file_path)
+                result = True
+                print(f'Read file {file_path}')
+                if os.path.exists(file_path):
                     os.remove(file_path)
             else:  
                 # Đường dẫn giải nén
@@ -309,11 +311,13 @@ async def read_file(file_path):
                         item_path = os.path.join(extract_dir, extract_path_item)
                         print(f'Item path: {item_path}')
                         if await read_file(item_path):
-                            os.remove(item_path)
+                            if os.path.exists(item_path):
+                                os.remove(item_path)
                         
 
                 # Xóa file sau khi đã đọc và xử lý
-                os.remove(file_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
                 print(f'File {file_path} has been processed and deleted.')
 
         elif os.path.isdir(file_path):
@@ -321,7 +325,8 @@ async def read_file(file_path):
                 item_path = os.path.join(file_path, item)
                 await read_file(item_path)
                 result = True
-            os.remove(file_path)
+            if os.path.exists(file_path):
+                os.remove(file_path)
             print(f'File {file_path} has been processed and deleted.')
     
     except Exception as e:
@@ -331,7 +336,7 @@ async def read_file(file_path):
         return result
     
 # Nhóm hàm đọc file 
-def read_file_txt(file_path, elastic_client):
+async def read_file_txt(file_path, elastic_client):
     try: 
         with open(file_path, 'r') as file_txt:
             for line in file_txt:
@@ -340,13 +345,12 @@ def read_file_txt(file_path, elastic_client):
                     "text": line,
                     "timestamp": datetime.now(),
                 }
-                response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
-                print(f'Response elastic: {response_elastic}')
+                await upload_data(doc, elastic_client)
     except Exception as e:
         print(f"Error indexing document: {e}")
 
 # Đọc file xlsx
-def read_table_xlsx(file_path, elastic_client):
+async def read_table_xlsx(file_path, elastic_client):
     try:
         workbook = load_workbook(filename=file_path, data_only=True)
         
@@ -358,8 +362,7 @@ def read_table_xlsx(file_path, elastic_client):
         # Đọc và in dữ liệu từ các hàng
         for row in sheet.iter_rows(min_row=2, values_only=True):
             doc = dict(zip(columns, row))
-            response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
-            print(f'Response elastic: {response_elastic}')
+            await upload_data(doc, elastic_client)
             
         workbook.close()
         return True
@@ -371,7 +374,7 @@ def read_table_xlsx(file_path, elastic_client):
         return None
 
 # Đọc file csv
-def read_table_csv(file_path, elastic_client):
+async def read_table_csv(file_path, elastic_client):
     try:
         with open(file_path, mode='r') as file:
             reader = csv.reader(file)
@@ -379,8 +382,7 @@ def read_table_csv(file_path, elastic_client):
             for row in reader:
                 # Tạo dictionary từ header và dữ liệu
                 doc = dict(zip(headers, row))
-                response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
-                print(f'Response elastic: {response_elastic}')
+                await upload_data(doc, elastic_client)
         return True
     except FileNotFoundError:
         print(f"Không tìm thấy file: {file_path}")
@@ -409,3 +411,30 @@ async def get_room_id(client):
             print(f"Chat riêng (Private Chat): {name} (ID: {chat_id})")
 
 
+
+# Hàm lấy entity của một đoạn chat
+async def get_channel_entity(client, chat_id):
+    try:
+        chat = None
+        if isinstance(chat_id, str):
+            if chat_id.startswith('-100'):
+                chat_id = int(chat_id[4:])
+            else:
+                chat_id = int(chat_id)
+        try:
+            chat = await client.get_entity(PeerChannel(chat_id))
+        except:
+            try:
+                chat = await client.get_entity(chat_id)
+            except Exception as e:
+                print(f'Error getting entity directly: {str(e)}')
+                return None
+                
+        return chat
+        
+    except ValueError as e:
+        print(f'Invalid channel ID format: {str(e)}')
+        return None
+    except Exception as e:
+        print(f'Error accessing channel: {str(e)}')
+        return None
