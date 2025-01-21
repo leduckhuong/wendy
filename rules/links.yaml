@@ -2,4 +2,6 @@
 
 line_rules:
     # https://t.me/+NcTl2vwgwWgyOThk
-    - rule1: ^https://t\.me/[^\s]+
+    - rule1: https://t\.me/[^\s]+
+    # https://akiralkzxzq2dsrzsrvbr2xgbbu2wgsmxryd4csgfameg52n7efvr2id.onion//#GoodNeighborsCreditUnion
+    - rule2: https://\w+\.onion/[^\s]+

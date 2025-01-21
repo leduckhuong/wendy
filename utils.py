@@ -9,7 +9,7 @@ import uuid
 import re
 import yaml
 
-from telethon.tl.types import PeerChannel
+from telethon.tl.types import PeerChannel, MessageMediaWebPage
 
 from openpyxl import load_workbook
 import csv
@@ -245,31 +245,42 @@ def check_line_format(rules, line):
     # Duyệt qua từng quy tắc trong danh sách
     for rule in rules:
         for rule_name, rule_pattern in rule.items():
-            x = re.match(rule_pattern, line) 
+            x = re.findall(rule_pattern, line) 
             if x:
                 return [rule_name, x]  # Trả về tên quy tắc đã khớp
     
-    print('Not matching rule')
+    # print('Not matching rule')
     return None  # Không có quy tắc nào khớp
+
+async def upload_data(elastic_client, index, doc):
+    response_elastic = elastic_client.index(index=index, id=str(uuid.uuid4()), document=doc)
+    print(f'Response elastic: {response_elastic}')
 
 def load_rules_from_yaml(rule_path):
     with open(rule_path, 'r') as file:
         rules = yaml.safe_load(file)
     return rules['line_rules']
 
-link_rules='./rules/link_rules.yaml'
+link_rules='./rules/links.yaml'
 async def get_room_link_from_message(message):
-    url = message['media']['webpage']['url']
-    print(f"URL: {url}")
+    text = message.text
     rules = load_rules_from_yaml(link_rules)
-    matches = check_line_format(rules, url)
+    matches = check_line_format(rules, text)
     if matches:
-        print(matches.group(1))
+        elastic_client = Elasticsearch(
+            [ELASTIC_URL],
+            api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
+            verify_certs=True,
+            ca_certs=ELASTIC_API_CACERT
+        )
+        for link in matches[1]:
+            doc = {
+                "url": link,
+                "timestamp": datetime.now(),
+            }
+            await upload_data(elastic_client, 'link', doc)
+        elastic_client.close()
     
-async def upload_data(doc, elastic_client):
-    response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
-    print(f'Response elastic: {response_elastic}')
-
 # Hàm đọc file
 async def read_file(file_path):
     try:
@@ -345,7 +356,7 @@ async def read_file_txt(file_path, elastic_client):
                     "text": line,
                     "timestamp": datetime.now(),
                 }
-                await upload_data(doc, elastic_client)
+                await upload_data(elastic_client, 'telegram_index', doc)
     except Exception as e:
         print(f"Error indexing document: {e}")
 
@@ -362,7 +373,7 @@ async def read_table_xlsx(file_path, elastic_client):
         # Đọc và in dữ liệu từ các hàng
         for row in sheet.iter_rows(min_row=2, values_only=True):
             doc = dict(zip(columns, row))
-            await upload_data(doc, elastic_client)
+            await upload_data(elastic_client, 'telegram_index', doc)
             
         workbook.close()
         return True
@@ -382,7 +393,7 @@ async def read_table_csv(file_path, elastic_client):
             for row in reader:
                 # Tạo dictionary từ header và dữ liệu
                 doc = dict(zip(headers, row))
-                await upload_data(doc, elastic_client)
+                await upload_data(elastic_client, 'telegram_index', doc)
         return True
     except FileNotFoundError:
         print(f"Không tìm thấy file: {file_path}")

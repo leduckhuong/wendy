@@ -4,7 +4,7 @@ import configparser
 from telethon import TelegramClient, events # type: ignore
 from telethon.tl.types import MessageMediaDocument # type: ignore
 
-from utils import get_file_hash_before_download, check_file_in_history, download_file_from_media, read_file
+from utils import get_file_hash_before_download, check_file_in_history, download_file_from_media, read_file, get_room_link_from_message
 
 
 config = configparser.ConfigParser()
@@ -66,6 +66,8 @@ async def handle_event(event):
                 
             else:
                 print("Downloaded failed")# Tải file về
+        else:
+            await get_room_link_from_message(message)
                 
     except Exception as e:
         print(f'Error in event handler: {str(e)}')
@@ -93,7 +95,9 @@ async def handle_event(event):
                 
             else:
                 print("Downloaded failed")# Tải file về
-                
+        else:
+            await get_room_link_from_message(message)
+
     except Exception as e:
         print(f'Error in event handler: {str(e)}')
         import traceback
