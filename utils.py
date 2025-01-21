@@ -9,7 +9,7 @@ import uuid
 import re
 import yaml
 
-from telethon.tl.types import PeerChannel, MessageMediaWebPage
+from telethon.tl.types import PeerChannel # type: ignore
 
 from openpyxl import load_workbook
 import csv
@@ -196,8 +196,9 @@ async def extract_file(file_path, extract_dir, password=None):
         for file_path in renamed_files:
             if check_file_in_history(history_read, file_hash):
                 print(f'Extract file zip file_path: {file_path}')
-                if os.path.exists(f'./storage/{file_path}'):
-                    os.remove(f'./storage/{file_path}')
+                file_path_full = f'./storage/{file_path}'
+                if os.path.exists(file_path_full):
+                    os.remove(file_path_full)
         return list(renamed_files)
         
     except Exception as e:
@@ -219,7 +220,6 @@ async def download_file_from_media(client, message, download_dir, file_hash):
                 if hasattr(attribute, 'file_name'):
                     file_name = str(file_hash) + '-' +  attribute.file_name
                     break
-        print(f'File name: {file_name}')
         file_path = None
         if check_valid_file_extension(file_name):
             download_path = os.path.join(download_dir, file_name)
@@ -263,23 +263,24 @@ def load_rules_from_yaml(rule_path):
 
 link_rules='./rules/links.yaml'
 async def get_room_link_from_message(message):
-    text = message.text
-    rules = load_rules_from_yaml(link_rules)
-    matches = check_line_format(rules, text)
-    if matches:
-        elastic_client = Elasticsearch(
-            [ELASTIC_URL],
-            api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
-            verify_certs=True,
-            ca_certs=ELASTIC_API_CACERT
-        )
-        for link in matches[1]:
-            doc = {
-                "url": link,
-                "timestamp": datetime.now(),
-            }
-            await upload_data(elastic_client, 'link', doc)
-        elastic_client.close()
+    text = message.message
+    if text is not None:
+        rules = load_rules_from_yaml(link_rules)
+        matches = check_line_format(rules, text)
+        if matches:
+            elastic_client = Elasticsearch(
+                [ELASTIC_URL],
+                api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
+                verify_certs=True,
+                ca_certs=ELASTIC_API_CACERT
+            )
+            for link in matches[1]:
+                doc = {
+                    "url": link,
+                    "timestamp": datetime.now(),
+                }
+                await upload_data(elastic_client, 'link', doc)
+            elastic_client.close()
     
 # Hàm đọc file
 async def read_file(file_path):
