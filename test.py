@@ -7,7 +7,6 @@ def base_time():
     now = datetime.now()
     return 1 if now.minute < 30 else 2
 
-
 async def monitor_timeout(client, timeout_seconds):
     """Ngắt kết nối sau một khoảng thời gian."""
     await asyncio.sleep(timeout_seconds)

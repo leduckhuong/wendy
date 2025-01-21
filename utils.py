@@ -267,7 +267,7 @@ async def get_room_link_from_message(message):
         print(matches.group(1))
     
 async def upload_data(doc, elastic_client):
-    response_elastic = await elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
+    response_elastic = elastic_client.index(index="telegram_index", id=str(uuid.uuid4()), document=doc)
     print(f'Response elastic: {response_elastic}')
 
 # Hàm đọc file
