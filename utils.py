@@ -299,6 +299,8 @@ async def read_file(file_path):
                     return None
                 file_hash = get_file_hash_after_download(file_path)
                 if check_file_in_history(history_read, file_hash):
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
                     return None
                 _, file_extension = os.path.splitext(file_path)
                 if file_extension == '.txt':
