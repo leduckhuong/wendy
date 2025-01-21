@@ -1,12 +1,17 @@
 import os
 import configparser
 import asyncio
-from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError, ChannelPrivateError, ChannelInvalidError
-from telethon.tl.functions.messages import GetHistoryRequest
-from telethon.tl.types import MessageMediaDocument
+from telethon import TelegramClient # type: ignore
+from telethon.errors import SessionPasswordNeededError, ChannelPrivateError, ChannelInvalidError # type: ignore
+from telethon.tl.functions.messages import GetHistoryRequest # type: ignore
+from telethon.tl.types import MessageMediaDocument # type: ignore
 
-from utils import check_file_in_history, get_channel_entity, download_file_from_media, read_file, get_file_hash_before_download
+from utils import (
+    check_file_in_history, get_channel_entity, 
+    download_file_from_media, read_file, 
+    get_file_hash_before_download, get_room_link_from_message,
+    get_room_id
+)
 
 
 # Reading Configs
@@ -14,10 +19,10 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 # Thông tin đăng nhập Telegram của bạn
-api_id = config['TELE_API']['APP_ID']
-api_hash = config['TELE_API']['HASH_ID']
-phone = config['TELE_API']['PHONE']
-username = config['TELE_API']['USERNAME']
+api_id = config['TELE_API_1']['APP_ID']
+api_hash = config['TELE_API_1']['HASH_ID']
+phone = config['TELE_API_1']['PHONE']
+username = config['TELE_API_1']['USERNAME']
 
 download_dir = './storage'
 history_read = './history_read.txt'
@@ -51,63 +56,65 @@ async def run(phone):
         me = await client.get_me()
         print(f'Logged in as: {me.username if me.username else me.first_name}')
         
-        # Get the channel entity
-        chat_id = -4627199062
-        chat = await get_channel_entity(client, chat_id)
-        
-        offset_id = 0
-        limit = 100
-        all_messages = []
-        total_messages = 0
-        total_count_limit = 0
+        list_room_ids = await get_room_id(client)
+        for chat_id in list_room_ids:
+            chat_id = -4627199062
+            chat = await get_channel_entity(client, chat_id)
+            
+            offset_id = 0
+            limit = 100
+            all_messages = []
+            total_messages = 0
+            total_count_limit = 0
 
-        while True:
-            history = await client(GetHistoryRequest(
-                peer=chat,
-                offset_id=offset_id,
-                offset_date=None,
-                add_offset=0,
-                limit=limit,
-                max_id=0,
-                min_id=0,
-                hash=0
-            ))
+            while True:
+                history = await client(GetHistoryRequest(
+                    peer=chat,
+                    offset_id=offset_id,
+                    offset_date=None,
+                    add_offset=0,
+                    limit=limit,
+                    max_id=0,
+                    min_id=0,
+                    hash=0
+                ))
+                
+                if not history.messages:
+                    break
+                
+                messages = history.messages
+                for message in messages:
+                    all_messages.append(message)
+                
+                offset_id = messages[len(messages) - 1].id
+                total_messages = len(all_messages)
+                
+                if total_count_limit != 0 and total_messages >= total_count_limit:
+                    break
             
-            if not history.messages:
-                break
-            
-            messages = history.messages
-            for message in messages:
-                all_messages.append(message)
-            
-            offset_id = messages[len(messages) - 1].id
-            total_messages = len(all_messages)
-            
-            if total_count_limit != 0 and total_messages >= total_count_limit:
-                break
-        
-        if all_messages:
-            for message in all_messages:
-                try:
-                    if isinstance(message.media, MessageMediaDocument):
-                        print(message)
-                        file_hash = await get_file_hash_before_download(client, message)
-                        if file_hash is None:
-                            continue 
-                        if check_file_in_history(history_downloaded, file_hash):
-                            continue
-                        file_path = await download_file_from_media(client, message, download_dir, file_hash)
-                        # Thêm độ trễ 1 giây giữa mỗi lần tải file
-                        await asyncio.sleep(1)
-                        if file_path:
-                            # Đọc file
-                            await read_file(file_path)
+            if all_messages:
+                for message in all_messages:
+                    try:
+                        if isinstance(message.media, MessageMediaDocument):
+                            file_hash = await get_file_hash_before_download(client, message)
+                            if file_hash is None:
+                                continue 
+                            if check_file_in_history(history_downloaded, file_hash):
+                                continue
+                            file_path = await download_file_from_media(client, message, download_dir, file_hash)
+                            # Thêm độ trễ 1 giây giữa mỗi lần tải file
+                            await asyncio.sleep(1)
+                            if file_path:
+                                # Đọc file
+                                await read_file(file_path)
+                            else:
+                                print("Downloaded failed")# Tải file về
                         else:
-                            print("Downloaded failed")# Tải file về
-                except Exception as e:
-                    print(f'Error downloading {e}')
-        else:
-            print('No messages were retrieved')
+                            await get_room_link_from_message(message)
+                    except Exception as e:
+                        print(f'Error downloading {e}')
+            else:
+                print('No messages were retrieved')
 
     except ChannelPrivateError:
         print('ERROR: This is a private channel. Please:')

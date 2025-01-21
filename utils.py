@@ -404,13 +404,12 @@ async def read_table_csv(file_path, elastic_client):
 
 # get id 
 async def get_room_id(client):
-    await client.start()    # Bắt đầu đăng nhập
-    
+    list_room_ids = []
     async for dialog in client.iter_dialogs():
         entity = dialog.entity
         name = dialog.name  
         chat_id = dialog.id 
-
+        list_room_ids.append(chat_id)
         # Phân loại loại chat
         if getattr(entity, 'broadcast', False):
             print(f"Kênh (Channel): {name} (ID: {chat_id})")
@@ -420,7 +419,7 @@ async def get_room_id(client):
             print(f"Bot: {name} (ID: {chat_id})")
         else:
             print(f"Chat riêng (Private Chat): {name} (ID: {chat_id})")
-
+    return list_room_ids
 
 
 # Hàm lấy entity của một đoạn chat
