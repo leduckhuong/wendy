@@ -87,8 +87,8 @@ async def handle_event(event):
             if check_file_in_history(history_downloaded, file_hash):
                 return
             file_path = await download_file_from_media(client2, message, download_dir, file_hash)
-            # Thêm độ trễ 1 giây giữa mỗi lần tải file
-            await asyncio.sleep(1)
+            # Thêm độ trễ 60 giây giữa mỗi lần tải file
+            await asyncio.sleep(60)
             if file_path:
                 # Đọc file
                 await read_file(file_path)
