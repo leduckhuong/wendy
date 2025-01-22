@@ -28,6 +28,14 @@ history_read = './history_read.txt'
 history_downloaded = './history_downloaded.txt'
 
 
+log_file_run = './logs/run.log'
+log_file_error = './logs/error.log'
+
+def write_log(file_path, log):
+    if os.path.exists(file_path):
+        with open(file_path, 'a') as f:
+            f.write(f'{log}\n')
+
 
 async def get_file_hash_before_download(client, message):
     document = message.media.document
@@ -45,8 +53,8 @@ async def get_file_hash_before_download(client, message):
 def get_file_hash_after_download(file_path, chunk_size=1024*1024):
     md5_hash = hashlib.md5()
     total_bytes = 0
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(chunk_size), b""):
+    with open(file_path, 'rb') as f:
+        for byte_block in iter(lambda: f.read(chunk_size), b''):
             md5_hash.update(byte_block)
             total_bytes += len(byte_block)
     return md5_hash.hexdigest()
@@ -58,7 +66,8 @@ def append_line_to_file(history_file, file_name):
             f.write(f'{file_name}\n')
 
     except Exception as e:
-        print(f'Error marking file download: {str(e)}')
+        print(f'Error marking file download: {str(e)} (utils.py:append_line_to_file:69)')
+        write_log(log_file_error, f'Error marking file download: {str(e)}  (utils.py:append_line_to_file:70)\n')
 
 
 # Hàm kiểm tra đoạn chat có phải là nhóm hoặc channel không
@@ -96,7 +105,8 @@ def check_file_in_history(history_file, file_hash):
             if file_hash in content:
                 return True
     except Exception as e:
-        print(f'Error checking file existence: {str(e)}')
+        print(f'Error checking file existence: {str(e)}  (utils.py:check_file_in_history:108)')
+        write_log(log_file_error, f'Error: {str(e)}   (utils.py:check_file_in_history:109)\n')
     return False
 
 
@@ -195,20 +205,23 @@ async def extract_file(file_path, extract_dir, password=None):
 
         for file_path in renamed_files:
             if check_file_in_history(history_read, file_hash):
-                print(f'Extract file zip file_path: {file_path}')
+                print(f'Extract file zip file_path: {file_path} (utils.py:extract_file:208)')
+                write_log(log_file_run, f'Extract file zip file_path: {file_path} (utils.py:extract_file:209)\n')
                 file_path_full = f'./storage/{file_path}'
                 if os.path.exists(file_path_full):
                     os.remove(file_path_full)
         return list(renamed_files)
         
     except Exception as e:
-        print(f'Error: {str(e)}')
+        print(f'Error: {str(e)} (utils.py:extract_file:216)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:extract_file:217)\n')
     return None
 
 # Hàm callback trả về % quá trình tải file
 async def progress_callback(current, total):
     percentage = (current / total) * 100
-    print(f'{current}/{total} bytes ({percentage:.2f}%)')
+    print(f'{current}/{total} bytes ({percentage:.2f}%) (utils.py:progress_callback:223)')
+    write_log(log_file_run, f'{current}/{total} bytes ({percentage:.2f}%) (utils.py:progress_callback:224)\n')
 
 
 # Hàm tải file 
@@ -234,9 +247,8 @@ async def download_file_from_media(client, message, download_dir, file_hash):
         return file_path
             
     except Exception as e:
-        print(f'Error during download: {str(e)}')
-        import traceback
-        print('Full error:', traceback.format_exc())
+        print(f'Error during download: {str(e)} (utils.py:download_file_from_media:250)')
+        write_log(log_file_error, f'Error during download: {str(e)} (utils.py:download_file_from_media:251)\n')
         return None
     
 # Hàm kiểm tra định dạng của line
@@ -248,13 +260,12 @@ def check_line_format(rules, line):
             x = re.findall(rule_pattern, line) 
             if x:
                 return [rule_name, x]  # Trả về tên quy tắc đã khớp
-    
-    # print('Not matching rule')
     return None  # Không có quy tắc nào khớp
 
 async def upload_data(elastic_client, index, doc):
     response_elastic = elastic_client.index(index=index, id=str(uuid.uuid4()), document=doc)
-    print(f'Response elastic: {response_elastic}')
+    print(f'Response elastic: {response_elastic} (utils.py:upload_data:267)')
+    write_log(log_file_run ,f'Response elastic: {response_elastic} (utils.py:upload_data:268)\n')
 
 def load_rules_from_yaml(rule_path):
     with open(rule_path, 'r') as file:
@@ -276,8 +287,8 @@ async def get_room_link_from_message(message):
             )
             for link in matches[1]:
                 doc = {
-                    "url": link,
-                    "timestamp": datetime.now(),
+                    'url': link,
+                    'timestamp': datetime.now(),
                 }
                 await upload_data(elastic_client, 'link', doc)
             elastic_client.close()
@@ -311,7 +322,8 @@ async def read_file(file_path):
                     await read_table_csv(file_path, elastic_client)
                 append_line_to_file(history_read, file_path)
                 result = True
-                print(f'Read file {file_path}')
+                print(f'Read file {file_path} (utils.py:read_file:325)')
+                write_log(log_file_run, f'Read file {file_path} (utils.py:read_file:326)\n')
                 if os.path.exists(file_path):
                     os.remove(file_path)
             else:  
@@ -332,7 +344,8 @@ async def read_file(file_path):
                 # Xóa file sau khi đã đọc và xử lý
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                print(f'File {file_path} has been processed and deleted.')
+                print(f'File {file_path} has been processed and deleted. (utils.py:read_file:347)')
+                write_log(log_file_run ,f'File {file_path} has been processed and deleted. (utils.py:read_file:348)\n')
 
         elif os.path.isdir(file_path):
             for item in os.listdir(file_path):
@@ -341,10 +354,12 @@ async def read_file(file_path):
                 result = True
             if os.path.exists(file_path):
                 os.remove(file_path)
-            print(f'File {file_path} has been processed and deleted.')
+            print(f'File {file_path} has been processed and deleted. (utils.py:read_file:357)')
+            write_log(log_file_run, f'File {file_path} has been processed and deleted. (utils.py:read_file:358)\n')
     
     except Exception as e:
-        print(f'Error: {e}')
+        print(f'Error: {e} (utils.py:read_file:361)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_file:362)\n')
     finally:
         elastic_client.close()
         return result
@@ -356,12 +371,13 @@ async def read_file_txt(file_path, elastic_client):
             for line in file_txt:
                 line = line.strip()
                 doc = {
-                    "text": line,
-                    "timestamp": datetime.now(),
+                    'text': line,
+                    'timestamp': datetime.now(),
                 }
                 await upload_data(elastic_client, 'telegram_index', doc)
     except Exception as e:
-        print(f"Error indexing document: {e}")
+        print(f'Error indexing document: {e} (utils.py:read_file_txt:379)')
+        write_log(log_file_error, f'Error indexing document: {str(e)}  (utils.py:read_file_txt:380)\n')
 
 # Đọc file xlsx
 async def read_table_xlsx(file_path, elastic_client):
@@ -381,10 +397,12 @@ async def read_table_xlsx(file_path, elastic_client):
         workbook.close()
         return True
     except FileNotFoundError:
-        print(f"Không tìm thấy file: {file_path}")
+        print(f'Không tìm thấy file: {file_path} (utils.py:read_table_xlsx:400)')
+        write_log(log_file_error, f'File not found: {file_path} (utils.py:read_table_xlsx:401)\n')
         return None
     except Exception as e:
-        print(f"Có lỗi xảy ra: {str(e)}")
+        print(f'Có lỗi xảy ra: {str(e)} (utils.py:read_table_xlsx:404)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_table_xlsx:405)\n')
         return None
 
 # Đọc file csv
@@ -399,10 +417,12 @@ async def read_table_csv(file_path, elastic_client):
                 await upload_data(elastic_client, 'telegram_index', doc)
         return True
     except FileNotFoundError:
-        print(f"Không tìm thấy file: {file_path}")
+        print(f'File not found: {file_path} (utils.py:read_table_csv:420)')
+        write_log(log_file_error, f'File not found: {file_path} (utils.py:read_table_csv:421)\n')
         return None
     except Exception as e:
-        print(f"Có lỗi xảy ra: {str(e)}")
+        print(f'Có lỗi xảy ra: {str(e)} (utils.py:read_table_csv:424)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_table_csv:425)\n')
         return None
 
 # get id 
@@ -415,13 +435,13 @@ async def get_room_id(client):
         list_room_ids.append(chat_id)
         # Phân loại loại chat
         if getattr(entity, 'broadcast', False):
-            print(f"Kênh (Channel): {name} (ID: {chat_id})")
+            print(f'Kênh (Channel): {name} (ID: {chat_id}) (utils.py:get_room_id:438)')
         elif getattr(entity, 'megagroup', False):
-            print(f"Nhóm (Group): {name} (ID: {chat_id})")
+            print(f'Nhóm (Group): {name} (ID: {chat_id}) (utils.py:get_room_id:440)')
         elif getattr(entity, 'bot', False):
-            print(f"Bot: {name} (ID: {chat_id})")
+            print(f'Bot: {name} (ID: {chat_id}) (utils.py:get_room_id:442)')
         else:
-            print(f"Chat riêng (Private Chat): {name} (ID: {chat_id})")
+            print(f'Chat riêng (Private Chat): {name} (ID: {chat_id})  (utils.py:get_room_id:444)')
     return list_room_ids
 
 
@@ -440,14 +460,16 @@ async def get_channel_entity(client, chat_id):
             try:
                 chat = await client.get_entity(chat_id)
             except Exception as e:
-                print(f'Error getting entity directly: {str(e)}')
-                return None
-                
+                print(f'Error getting entity directly: {str(e)} (utils.py:get_channel_entity:463)')
+                write_log(log_file_error, f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:464)\n')
+                return None     
         return chat
         
     except ValueError as e:
-        print(f'Invalid channel ID format: {str(e)}')
+        print(f'Invalid channel ID format: {str(e)} (utils.py:get_channel_entity:469)')
+        write_log(log_file_error, f'Invalid channel ID format: {str(e)} (utils.py:get_channel_entity:470)\n')
         return None
     except Exception as e:
-        print(f'Error accessing channel: {str(e)}')
+        print(f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:473)')
+        write_log(log_file_error, f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:474)\n')
         return None

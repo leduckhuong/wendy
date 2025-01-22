@@ -7,6 +7,7 @@ from telethon.tl.functions.messages import GetHistoryRequest # type: ignore
 from telethon.tl.types import MessageMediaDocument # type: ignore
 
 from utils import (
+    write_log,
     check_file_in_history, get_channel_entity, 
     download_file_from_media, read_file, 
     get_file_hash_before_download, get_room_link_from_message,
@@ -30,6 +31,9 @@ history_downloaded = './history_downloaded.txt'
 
 session_dir = './sessions'
 
+log_file_run = './logs/run.log'
+log_file_error = './logs/error.log'
+
 # Đảm bảo thư mục session tồn tại
 os.makedirs(session_dir, exist_ok=True)
 
@@ -44,6 +48,7 @@ async def run(phone):
     try:
         await client.start()
         print('Client Created')
+        write_log(log_file_run, 'Client Started\n')
         
         # Ensure authorization
         if not await client.is_user_authorized():
@@ -55,11 +60,12 @@ async def run(phone):
 
         me = await client.get_me()
         print(f'Logged in as: {me.username if me.username else me.first_name}')
-        
+        write_log(log_file_run, f'Logged in as: {me.username if me.username else me.first_name}\n')
         list_room_ids = await get_room_id(client)
         for chat_id in list_room_ids:
 
             print(f'Chat id: {chat_id}')
+            write_log(log_file_run, f'Chat id: {chat_id}\n')
 
             chat = await get_channel_entity(client, chat_id)
             
@@ -108,33 +114,27 @@ async def run(phone):
                             if file_path:
                                 # Đọc file
                                 await read_file(file_path)
-                            else:
-                                print("Downloaded failed")# Tải file về
                         else:
                             await get_room_link_from_message(message)
                     except Exception as e:
                         print(f'Error downloading {e}')
+                        write_log(log_file_error, f'Error: {str(e)}\n')
             else:
                 print('No messages were retrieved')
+                write_log(log_file_error, 'No messages were retrieved\n')
 
     except ChannelPrivateError:
-        print('ERROR: This is a private channel. Please:')
-        print('1. Join the channel first')
-        print('2. Make sure you are using the correct channel ID')
-        print('3. Check if you have been banned or removed from the channel')
+        print('ERROR: This is a private channel.')
+        write_log(log_file_error, 'Error: This is a private channel.\n')
     except ChannelInvalidError:
-        print('ERROR: Invalid channel. Please:')
-        print('1. Verify the channel ID is correct')
-        print('2. Make sure the channel still exists')
-        print('3. Try getting the channel ID from the channels"s URL')
+        print('ERROR: Invalid channel.')
+        write_log(log_file_error, 'Error: Invalid channel.\n')
     except ValueError as e:
         print(f'ERROR: Invalid channel ID format: {str(e)}')
-        print('Tips:')
-        print('1. Try using the channel username if it is public')
-        print('2. Make sure you are copying the full channel ID')
-        print('3. If using a channel URL, make sure to use only the numeric ID part')
+        write_log(log_file_error, f'Error: Invalid channel ID format: {str(e)}\n')
     except Exception as e:
         print(f'Unexpected error: {str(e)}')
+        write_log(log_file_error, f'Error: {str(e)}\n')
     finally:
         await client.disconnect() 
 

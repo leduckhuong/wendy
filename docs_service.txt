@@ -1,0 +1,36 @@
+leduckhuong@ubuntu:~$ git clone https://github.com/leduckhuong/wendy.git
+
+
+leduckhuong@ubuntu:~$ cd wendy
+
+
+leduckhuong@ubuntu:~/wendy$ python3 -m venv venv
+
+
+leduckhuong@ubuntu:~/wendy$ source /home/leduckhuong/wendy/venv/bin/activate
+
+
+(venv) leduckhuong@ubuntu:~/wendy$ pip install -r /home/leduckhuong/wendy/requirements.txt
+
+
+
+leduckhuong@ubuntu:~/wendy$ sudo /etc/systemd/system/telegram_listener.service
+
+[Unit]
+Description=Telegram Listener Service
+After=network.target
+
+[Service]
+User=leduckhuong
+WorkingDirectory=/home/leduckhuong/wendy
+ExecStart=/home/leduckhuong/wendy/venv/bin/python3 /home/leduckhuong/wendy/index.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+(venv) leduckhuong@ubuntu:~/wendy$ sudo systemctl daemon-reload
+(venv) leduckhuong@ubuntu:~/wendy$ sudo systemctl start telegram_listener.service
+(venv) leduckhuong@ubuntu:~/wendy$ sudo systemctl status telegram_listener.service

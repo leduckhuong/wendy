@@ -4,8 +4,7 @@ import configparser
 from telethon import TelegramClient, events # type: ignore
 from telethon.tl.types import MessageMediaDocument # type: ignore
 
-from utils import get_file_hash_before_download, check_file_in_history, download_file_from_media, read_file, get_room_link_from_message
-
+from utils import write_log, get_file_hash_before_download, check_file_in_history, download_file_from_media, read_file, get_room_link_from_message
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -28,6 +27,9 @@ API_2 = {
     "username": config['TELE_API_2']['USERNAME']
 }
 
+log_file_run = './logs/run.log'
+log_file_error = './logs/error.log'
+
 session_dir = './sessions'
 os.makedirs(session_dir, exist_ok=True)
 
@@ -46,7 +48,7 @@ history_read = './history_read.txt'
 history_downloaded = './history_downloaded.txt'
 
 @client1.on(events.NewMessage)
-async def handle_event(event):
+async def handle_newMessage(event):
     try:
         message = event.message
 
@@ -64,18 +66,15 @@ async def handle_event(event):
                 # Đọc file
                 await read_file(file_path)
                 
-            else:
-                print("Downloaded failed")# Tải file về
         else:
             await get_room_link_from_message(message)
                 
     except Exception as e:
-        print(f'Error in event handler: {str(e)}')
-        import traceback
-        print("Full error:", traceback.format_exc()) 
+        print(f'Error in event handler: {str(e)} (telegram_listener.py:handle_newMessage:73)')
+        write_log(log_file_error, f'Error: {str(e)} (telegram_listener.py:handle_newMessage:74)\n')
     
 @client2.on(events.NewMessage)
-async def handle_event(event):
+async def handle_newMessage(event):
     try:
         message = event.message
 
@@ -92,14 +91,10 @@ async def handle_event(event):
             if file_path:
                 # Đọc file
                 await read_file(file_path)
-                
-            else:
-                print("Downloaded failed")# Tải file về
         else:
             await get_room_link_from_message(message)
 
     except Exception as e:
-        print(f'Error in event handler: {str(e)}')
-        import traceback
-        print("Full error:", traceback.format_exc()) 
+        print(f'Error in event handler: {str(e)} (telegram_listener.py:handle_newMessage:98)')
+        write_log(log_file_error, f'Error: {str(e)} (telegram_listener.py:handle_newMessage:99)\n')
 
