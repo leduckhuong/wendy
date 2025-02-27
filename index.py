@@ -55,7 +55,7 @@ async def main():
                 await start_client_with_timeout(client2, 'client2', timeout_seconds)
         except Exception as e:
             print(f'Error in main loop: {e} (index.py:main:57)')
-            write_log(log_file_error, f'Error: {str(e)} (index.py:main:57)\n')
+            write_log(log_file_error, f'Error: {str(e)} (index.py:main:58)\n')
         await asyncio.sleep(1)
 
 
