@@ -8,9 +8,8 @@ from telethon.tl.types import MessageMediaDocument # type: ignore
 
 from utils import (
     write_log,
-    check_file_in_history, get_channel_entity, 
-    download_file_from_media, read_file, 
-    get_file_hash_before_download, get_room_link_from_message,
+    get_channel_entity, 
+    get_room_link_from_message,
     get_room_id
 )
 
@@ -73,7 +72,7 @@ async def run(phone):
                 print(f"Error getting channel entity for {chat_id}: {e}")
                 write_log(log_file_error, f"Error getting channel entity for {chat_id}: {e}\n")
                 continue  # Bỏ qua chat_id này và tiếp tục vòng lặp
-            
+
             offset_id = 0
             limit = 100
             all_messages = []
@@ -91,10 +90,10 @@ async def run(phone):
                     min_id=0,
                     hash=0
                 ))
-                
+
                 if not history.messages:
                     break
-                
+
                 messages = history.messages
                 all_messages.extend(messages)  # Tối ưu hóa lưu trữ
 
@@ -106,20 +105,9 @@ async def run(phone):
 
             if all_messages:
                 for message in all_messages:
+                    print('passed')
                     try:
-                        if isinstance(message.media, MessageMediaDocument):
-                            file_hash = await get_file_hash_before_download(client, message)
-                            if file_hash is None:
-                                continue 
-                            if check_file_in_history(history_downloaded, file_hash):
-                                continue
-                            file_path = await download_file_from_media(client, message, download_dir, file_hash)
-                            # Thêm độ trễ 60 giây giữa mỗi lần tải file
-                            await asyncio.sleep(60)
-                            if file_path:
-                                # Đọc file
-                                await read_file(file_path)
-                        else:
+                        if message.media and not isinstance(message.media, MessageMediaDocument):
                             await get_room_link_from_message(message)
                     except Exception as e:
                         print(f'Error downloading {e}')
@@ -127,6 +115,7 @@ async def run(phone):
             else:
                 print('No messages were retrieved')
                 write_log(log_file_error, 'No messages were retrieved\n')
+
 
     except ChannelPrivateError:
         print('ERROR: This is a private channel.')

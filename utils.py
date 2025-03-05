@@ -279,19 +279,21 @@ async def get_room_link_from_message(message):
         rules = load_rules_from_yaml(link_rules)
         matches = check_line_format(rules, text)
         if matches:
-            elastic_client = Elasticsearch(
-                [ELASTIC_URL],
-                api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
-                verify_certs=True,
-                ca_certs=ELASTIC_API_CACERT
-            )
+        #     elastic_client = Elasticsearch(
+        #         [ELASTIC_URL],
+        #         api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
+        #         verify_certs=True,
+        #         ca_certs=ELASTIC_API_CACERT
+        #     )
             for link in matches[1]:
-                doc = {
-                    'url': link,
-                    'timestamp': datetime.now(),
-                }
-                await upload_data(elastic_client, 'link', doc)
-            elastic_client.close()
+                print(f'Link: {link}')
+                write_log('./links.txt', link)
+        #         doc = {
+        #             'url': link,
+        #             'timestamp': datetime.now(),
+        #         }
+        #         await upload_data(elastic_client, 'link', doc)
+        #     elastic_client.close()
     
 # Hàm đọc file
 async def read_file(file_path):
