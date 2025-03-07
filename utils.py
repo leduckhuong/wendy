@@ -309,7 +309,8 @@ async def read_file(file_path):
 
             if not check_compress_file(file_path):
                 if not check_valid_file_extension(file_path):
-                    return None
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
                 file_hash = get_file_hash_after_download(file_path)
                 if check_file_in_history(history_read, file_hash):
                     if os.path.exists(file_path):
