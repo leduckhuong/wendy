@@ -1,2 +1,2 @@
 **Listener worker**
-!(./diagrams/listener_worker.png)
+![](./diagrams/listener_worker.png)
