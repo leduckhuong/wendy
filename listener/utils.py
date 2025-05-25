@@ -5,31 +5,24 @@ import py7zr # type: ignore
 from datetime import datetime
 import configparser
 import hashlib
-import uuid
 import re
 import yaml
 
 from telethon.tl.types import PeerChannel # type: ignore
 
-from openpyxl import load_workbook
-import csv
-
-from datetime import datetime
-from elasticsearch import Elasticsearch # type: ignore
 
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-ELASTIC_URL = config['ELASTIC_API']['ELASTIC_URL']
-ELASTIC_API_KEY = config['ELASTIC_API']['ELASTIC_API_KEY']
-ELASTIC_API_CACERT = config['ELASTIC_API']['ELASTIC_API_CACERT']
 
-history_read = './history_read.txt'
-history_downloaded = './history_downloaded.txt'
+history_read = config['HISTORY']['HISTORY_FILE']
+history_downloaded = config['HISTORY']['HISTORY_DOWNLOADED_FILE']
 
 
-log_file_run = './logs/run.log'
-log_file_error = './logs/error.log'
+log_file_run = config['LOGGING']['LOG_FILE_RUN']
+log_file_error = config['LOGGING']['LOG_FILE_ERROR']
+
+white_file_types = config['WHITELIST']['WHITELIST_FILE_TYPES']
 
 def write_log(file_path, log):
     if os.path.exists(file_path):
@@ -84,14 +77,6 @@ def check_compress_file(file):
     return file_extension in compress_extensions
 
 
-# Hàm kiểm tra mail có thuộc miền chỉ định không, nếu không chỉ định email nào thì mặc định là mọi miền 
-mail_extensions = []
-def check_custom_mail(mail):
-    if len(mail_extensions) == 0:
-        return True
-    return any(mail.endswith(suffix) for suffix in mail_extensions)
-
-
 # Hàm kiểm tra xem tên file đã tồn tại trong file history chưa
 def check_file_in_history(history_file, file_hash):
     try:
@@ -111,10 +96,9 @@ def check_file_in_history(history_file, file_hash):
 
 
 # Hàm kiểm tra xem file có đúng định dạng được chỉ định không, nếu không chỉ định extension nào sẽ chấp nhận mọi kiểu file
-file_extensions = ['.txt', '.xlsx', '.csv', '.zip', '.7z', '.rar']
 def check_valid_file_extension(file):
     _, file_extension = os.path.splitext(file)
-    return file_extension in file_extensions
+    return file_extension in white_file_types
 
 # Hàm Rename tên file sau khi giải nén
 async def rename_extract_file(extract_file_path, new_files):
@@ -253,7 +237,6 @@ async def download_file_from_media(client, message, download_dir, file_hash):
     
 # Hàm kiểm tra định dạng của line
 def check_line_format(rules, line):
-
     # Duyệt qua từng quy tắc trong danh sách
     for rule in rules:
         for rule_name, rule_pattern in rule.items():
@@ -262,17 +245,14 @@ def check_line_format(rules, line):
                 return [rule_name, x]  # Trả về tên quy tắc đã khớp
     return None  # Không có quy tắc nào khớp
 
-async def upload_data(elastic_client, index, doc):
-    response_elastic = elastic_client.index(index=index, id=str(uuid.uuid4()), document=doc)
-    print(f'Response elastic: {response_elastic} (utils.py:upload_data:267)')
-    write_log(log_file_run ,f'Response elastic: {response_elastic} (utils.py:upload_data:268)\n')
-
+# Hàm tải quy tắc từ file yaml dành cho fetch_previous_messages.py
 def load_rules_from_yaml(rule_path):
     with open(rule_path, 'r') as file:
         rules = yaml.safe_load(file)
     return rules['line_rules']
 
-link_rules='./rules/links.yaml'
+# Hàm lấy link từ message dành cho fetch_previous_messages.py
+link_rules=config['RULES']['LINK_RULES']
 async def get_room_link_from_message(message):
     text = message.message
     if text is not None:
@@ -294,141 +274,8 @@ async def get_room_link_from_message(message):
         #         }
         #         await upload_data(elastic_client, 'link', doc)
         #     elastic_client.close()
-    
-# Hàm đọc file
-async def read_file(file_path):
-    try:
-        result = None
-        elastic_client = Elasticsearch(
-            [ELASTIC_URL],
-            api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
-            verify_certs=True,
-            ca_certs=ELASTIC_API_CACERT
-        )
-        if os.path.isfile(file_path):
 
-            if not check_compress_file(file_path):
-                if not check_valid_file_extension(file_path):
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                file_hash = get_file_hash_after_download(file_path)
-                if check_file_in_history(history_read, file_hash):
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                    return None
-                _, file_extension = os.path.splitext(file_path)
-                if file_extension == '.txt':
-                    await read_file_txt(file_path, elastic_client)
-                elif file_extension == '.xlsx':
-                    await read_table_xlsx(file_path, elastic_client)
-                elif file_extension == '.csv':
-                    await read_table_csv(file_path, elastic_client)
-                append_line_to_file(history_read, file_path)
-                result = True
-                print(f'Read file {file_path} (utils.py:read_file:325)')
-                write_log(log_file_run, f'Read file {file_path} (utils.py:read_file:326)\n')
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-            else:  
-                # Đường dẫn giải nén
-                extract_dir = './storage/'
-                list_extract = await extract_file(file_path, extract_dir)
-                if list_extract:
-
-                    # Sau khi giải nén, đọc nội dung các file trong thư mục đã giải nén
-                    for extract_path_item in list_extract:
-                        item_path = os.path.join(extract_dir, extract_path_item)
-                        print(f'Item path: {item_path}')
-                        if await read_file(item_path):
-                            if os.path.exists(item_path):
-                                os.remove(item_path)
-                        
-
-                # Xóa file sau khi đã đọc và xử lý
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                print(f'File {file_path} has been processed and deleted. (utils.py:read_file:347)')
-                write_log(log_file_run ,f'File {file_path} has been processed and deleted. (utils.py:read_file:348)\n')
-
-        elif os.path.isdir(file_path):
-            for item in os.listdir(file_path):
-                item_path = os.path.join(file_path, item)
-                await read_file(item_path)
-                result = True
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            print(f'File {file_path} has been processed and deleted. (utils.py:read_file:357)')
-            write_log(log_file_run, f'File {file_path} has been processed and deleted. (utils.py:read_file:358)\n')
-    
-    except Exception as e:
-        print(f'Error: {e} (utils.py:read_file:361)')
-        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_file:362)\n')
-    finally:
-        elastic_client.close()
-        return result
-    
-# Nhóm hàm đọc file 
-async def read_file_txt(file_path, elastic_client):
-    try: 
-        with open(file_path, 'r') as file_txt:
-            for line in file_txt:
-                line = line.strip()
-                doc = {
-                    'text': line,
-                    'timestamp': datetime.now(),
-                }
-                await upload_data(elastic_client, 'telegram_index', doc)
-    except Exception as e:
-        print(f'Error indexing document: {e} (utils.py:read_file_txt:379)')
-        write_log(log_file_error, f'Error indexing document: {str(e)}  (utils.py:read_file_txt:380)\n')
-
-# Đọc file xlsx
-async def read_table_xlsx(file_path, elastic_client):
-    try:
-        workbook = load_workbook(filename=file_path, data_only=True)
-        
-        sheet = workbook.active
-        
-        columns = [cell.value for cell in sheet[1]]
-        
-        
-        # Đọc và in dữ liệu từ các hàng
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            doc = dict(zip(columns, row))
-            await upload_data(elastic_client, 'telegram_index', doc)
-            
-        workbook.close()
-        return True
-    except FileNotFoundError:
-        print(f'Không tìm thấy file: {file_path} (utils.py:read_table_xlsx:400)')
-        write_log(log_file_error, f'File not found: {file_path} (utils.py:read_table_xlsx:401)\n')
-        return None
-    except Exception as e:
-        print(f'Có lỗi xảy ra: {str(e)} (utils.py:read_table_xlsx:404)')
-        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_table_xlsx:405)\n')
-        return None
-
-# Đọc file csv
-async def read_table_csv(file_path, elastic_client):
-    try:
-        with open(file_path, mode='r') as file:
-            reader = csv.reader(file)
-            headers = next(reader)
-            for row in reader:
-                # Tạo dictionary từ header và dữ liệu
-                doc = dict(zip(headers, row))
-                await upload_data(elastic_client, 'telegram_index', doc)
-        return True
-    except FileNotFoundError:
-        print(f'File not found: {file_path} (utils.py:read_table_csv:420)')
-        write_log(log_file_error, f'File not found: {file_path} (utils.py:read_table_csv:421)\n')
-        return None
-    except Exception as e:
-        print(f'Có lỗi xảy ra: {str(e)} (utils.py:read_table_csv:424)')
-        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_table_csv:425)\n')
-        return None
-
-# get id 
+# get id dành cho fetch_previous_messages.py
 async def get_room_id(client):
     list_room_ids = []
     async for dialog in client.iter_dialogs():
@@ -448,7 +295,7 @@ async def get_room_id(client):
     return list_room_ids
 
 
-# Hàm lấy entity của một đoạn chat
+# Hàm lấy entity của một đoạn chat dành cho fetch_previous_messages.py
 async def get_channel_entity(client, chat_id):
     try:
         chat = None

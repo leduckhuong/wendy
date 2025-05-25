@@ -1,12 +1,22 @@
-Chat id: -1001911140647
+Starting server client2  (telegram_listener.py:start_client_with_timeout:105)
 
-Chat id: -1001998228893
+Disconnected client2  (telegram_listener.py:start_client_with_timeout:116)
 
-Chat id: -1002091450469
+Starting server client2  (telegram_listener.py:start_client_with_timeout:105)
 
-Chat id: -1001891962248
+Disconnected client2  (telegram_listener.py:start_client_with_timeout:116)
 
-Chat id: -1001827635027
+Starting server client2  (telegram_listener.py:start_client_with_timeout:109)
 
-Chat id: -1002071619716
+Disconnected client2  (telegram_listener.py:start_client_with_timeout:120)
+
+Starting server client2  (telegram_listener.py:start_client_with_timeout:109)
+
+Disconnected client2  (telegram_listener.py:start_client_with_timeout:120)
+
+Starting server client1  (telegram_listener.py:start_client_with_timeout:109)
+
+Start at client 1 (telegram_listener.py:handle_newMessage:80)
+
+Disconnected client1  (telegram_listener.py:start_client_with_timeout:120)
 
