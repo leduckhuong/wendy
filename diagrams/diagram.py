@@ -22,22 +22,14 @@ with Diagram("Listener Worker", show=False, direction="TB"):
     a_storage = HealthCheck("add to file storage")
     file = SystemsManagerDocuments("file")
     z_txt = SystemsManagerDocuments("zip, rar, 7z, tar, text,...")
-    z_tar = SystemsManagerDocuments("zip, rar, 7z, tar")
-    t_file = SystemsManagerDocuments("text, csv, json, xml,...")
-    extract = ElasticContainerServiceService("extract")
     type = LogService("type")
-    type2 = LogService("type")
     download = InternetAlt1("download")
-    s_storage = Database("save_to_storage")
 
 
     l_worker >> forums >> message 
     message >> text >> filter >> a_storage
-    message  >> file >> type >> z_txt >> download >> type2 >> z_tar >> extract 
+    message  >> file >> type >> z_txt >> download 
 
-    type2 >> t_file >> s_storage
-   
-    extract >> type2
 
 with Diagram("Reader Worker", show=False, direction="TB"):
     r_worker =  EC2Instance("reader worker")
@@ -46,8 +38,15 @@ with Diagram("Reader Worker", show=False, direction="TB"):
     filter = SagemakerTrainingJob("filter")
     m_data = TrustedAdvisorChecklist("matched data")
     a_dist = HealthCheck("add to file dist")
+    type = LogService("type")
+    t_file = SystemsManagerDocuments("text, csv, json, xml,...")
+    z_tar = SystemsManagerDocuments("zip, rar, 7z, tar")
+    extract = ElasticContainerServiceService("extract")
 
-    r_worker >> storage >> file >> filter >> m_data >> a_dist
+    r_worker >> storage >> file >> type >> z_tar >> extract  
+
+    type >> t_file >> filter >> m_data >> a_dist
+    extract >> type
 
 with Diagram("Web Backend Worker", show=False, direction="TB"):
     b_worker =  EC2Instance("backend worker")
