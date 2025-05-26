@@ -1,0 +1,479 @@
+import os
+import pyzipper
+import rarfile # type: ignore
+import py7zr # type: ignore
+from datetime import datetime
+import configparser
+import hashlib
+import uuid
+import re
+import yaml
+
+from telethon.tl.types import PeerChannel # type: ignore
+
+from openpyxl import load_workbook
+import csv
+
+from datetime import datetime
+from elasticsearch import Elasticsearch # type: ignore
+
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+# ELASTIC_URL = config['ELASTIC_API']['ELASTIC_URL']
+# ELASTIC_API_KEY = config['ELASTIC_API']['ELASTIC_API_KEY']
+# ELASTIC_API_CACERT = config['ELASTIC_API']['ELASTIC_API_CACERT']
+
+history_read = config['HISTORY']['HISTORY_FILE']
+history_downloaded = config['HISTORY']['HISTORY_DOWNLOADED_FILE']
+
+
+log_file_run = config['LOGGING']['LOG_FILE_RUN']
+log_file_error = config['LOGGING']['LOG_FILE_ERROR']
+
+white_file_types = config['WHITELIST']['WHITELIST_FILE_TYPES']
+
+def write_log(file_path, log):
+    if os.path.exists(file_path):
+        with open(file_path, 'a') as f:
+            f.write(f'{log}\n')
+
+
+async def get_file_hash_before_download(client, message):
+    document = message.media.document
+            
+    # Tạo buffer để lưu toàn bộ dữ liệu
+    file_data = bytearray()
+    
+    # Tải và lưu từng chunk
+    async for chunk in client.iter_download(document, chunk_size=1024*1024):
+        file_data.extend(chunk)
+    
+    # Tính hash từ data trong memory
+    return hashlib.md5(file_data).hexdigest()
+
+def get_file_hash_after_download(file_path, chunk_size=1024*1024):
+    md5_hash = hashlib.md5()
+    total_bytes = 0
+    with open(file_path, 'rb') as f:
+        for byte_block in iter(lambda: f.read(chunk_size), b''):
+            md5_hash.update(byte_block)
+            total_bytes += len(byte_block)
+    return md5_hash.hexdigest()
+
+# Hàm thêm line vào file
+def append_line_to_file(history_file, file_name):
+    try:
+        with open(history_file, 'a', encoding='utf-8') as f:
+            f.write(f'{file_name}\n')
+
+    except Exception as e:
+        print(f'Error marking file download: {str(e)} (utils.py:append_line_to_file:69)')
+        write_log(log_file_error, f'Error marking file download: {str(e)}  (utils.py:append_line_to_file:70)\n')
+
+
+# Hàm kiểm tra đoạn chat có phải là nhóm hoặc channel không
+def check_chat_type(chat_id):
+    if str(chat_id).startswith('-100'):
+        return True
+    return False
+
+
+# Hàm kiểm tra định dạng file có phải file nén không
+compress_extensions = ['.zip', '.rar', '.7z']
+def check_compress_file(file):
+    _, file_extension = os.path.splitext(file)
+    return file_extension in compress_extensions
+
+
+# Hàm kiểm tra mail có thuộc miền chỉ định không, nếu không chỉ định email nào thì mặc định là mọi miền 
+mail_extensions = []
+def check_custom_mail(mail):
+    if len(mail_extensions) == 0:
+        return True
+    return any(mail.endswith(suffix) for suffix in mail_extensions)
+
+
+# Hàm kiểm tra xem tên file đã tồn tại trong file history chưa
+def check_file_in_history(history_file, file_hash):
+    try:
+        # Kiểm tra file có tồn tại không
+        if not os.path.exists(history_file):
+            return False
+
+        # Mở và đọc file
+        with open(history_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            if file_hash in content:
+                return True
+    except Exception as e:
+        print(f'Error checking file existence: {str(e)}  (utils.py:check_file_in_history:108)')
+        write_log(log_file_error, f'Error: {str(e)}   (utils.py:check_file_in_history:109)\n')
+    return False
+
+
+# Hàm kiểm tra xem file có đúng định dạng được chỉ định không, nếu không chỉ định extension nào sẽ chấp nhận mọi kiểu file
+def check_valid_file_extension(file):
+    _, file_extension = os.path.splitext(file)
+    return file_extension in white_file_types
+
+# Hàm Rename tên file sau khi giải nén
+async def rename_extract_file(extract_file_path, new_files):
+    renamed_files = []
+    for item in new_files:
+        item_path = os.path.join(extract_file_path, item)
+
+        if os.path.isfile(item_path):  # Nếu là file
+            file_size = str(os.path.getsize(item_path)) 
+            # Đổi tên file
+            new_name = f'{file_size}-{item_path}'
+            new_path = os.path.join(extract_file_path, new_name)
+            os.rename(item_path, new_path)
+            renamed_files.append(new_name)
+        
+        elif os.path.isdir(item_path):  # Nếu là thư mục
+            # Đổi tên các file bên trong thư mục
+            for root, _, files in os.walk(item_path):
+                for file_name in files:
+                    old_file_path = os.path.join(root, file_name)
+                    # Lấy kích thước file
+                    file_size = os.path.getsize(old_file_path)
+                    # Tạo tên file mới
+                    new_file_name = f'{file_size}-{file_name}'
+
+                    new_file_path = os.path.join(root, new_file_name)
+                    os.rename(old_file_path, new_file_path)
+                    renamed_files.append(os.path.relpath(new_file_path, extract_file_path))
+
+    return renamed_files
+
+async def extract_file(file_path, extract_dir, password=None):
+    try:
+        os.makedirs(extract_dir, exist_ok=True)
+        _, file_extension = os.path.splitext(file_path)
+        before_extract = set(os.listdir(extract_dir))
+
+        if (file_extension == '.zip'):   
+            with pyzipper.AESZipFile(file_path, 'r') as zip_ref:
+                if password:
+                    zip_ref.extractall(extract_dir, pwd=password.encode('utf-8'))
+                else:
+                    zip_ref.extractall(extract_dir)
+        elif (file_extension == '.rar'):
+            with rarfile.RarFile(file_path, 'r') as rar_ref:
+                if password:
+                    rar_ref.extractall(extract_dir, pwd=password)
+                else:
+                    rar_ref.extractall(extract_dir)
+        elif (file_extension == '.7z'):
+            with py7zr.SevenZipFile(file_path, mode='r', password=password) as archive:
+                archive.extractall(path=extract_dir)
+
+        after_extract = set(os.listdir(extract_dir))
+
+        new_files = after_extract - before_extract
+
+        # Đổi tên file 
+        renamed_files = []
+        for item in new_files:
+            item_path = os.path.join(extract_dir, item)
+
+            if os.path.isfile(item_path):  # Nếu là file
+                file_hash = get_file_hash_after_download(item_path)
+                # Đổi tên file
+                new_name = f'{file_hash}-{item_path}'
+                new_path = os.path.join(extract_dir, new_name)
+                os.rename(item_path, new_path)
+                renamed_files.append(new_name)
+            
+            elif os.path.isdir(item_path):  # Nếu là thư mục
+                # Đổi tên các file bên trong thư mục
+                root_dir = None
+                for root, _, files in os.walk(item_path):
+                    for file_name in files:
+                        old_file_path = os.path.join(root, file_name)
+                        # Lấy mã băm file
+                        file_hash = get_file_hash_after_download(old_file_path)
+                        # Tạo tên file mới
+                        new_file_name = f'{file_hash}-{file_name}'
+
+                        new_file_path = os.path.join('./storage', new_file_name)
+                        os.rename(old_file_path, new_file_path)
+                        renamed_files.append(os.path.relpath(new_file_path, extract_dir))
+                    root_dir = root
+                os.rmdir(root_dir)
+
+
+        for file_path in renamed_files:
+            if check_file_in_history(history_read, file_hash):
+                print(f'Extract file zip file_path: {file_path} (utils.py:extract_file:208)')
+                write_log(log_file_run, f'Extract file zip file_path: {file_path} (utils.py:extract_file:209)\n')
+                file_path_full = f'./storage/{file_path}'
+                if os.path.exists(file_path_full):
+                    os.remove(file_path_full)
+        return list(renamed_files)
+        
+    except Exception as e:
+        print(f'Error: {str(e)} (utils.py:extract_file:216)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:extract_file:217)\n')
+    return None
+
+# Hàm callback trả về % quá trình tải file
+async def progress_callback(current, total):
+    percentage = (current / total) * 100
+    print(f'{current}/{total} bytes ({percentage:.2f}%) (utils.py:progress_callback:223)')
+    write_log(log_file_run, f'{current}/{total} bytes ({percentage:.2f}%) (utils.py:progress_callback:224)\n')
+
+
+# Hàm tải file 
+async def download_file_from_media(client, message, download_dir, file_hash):
+    try:
+        file_name = None
+        if hasattr(message.media, 'document') and message.media.document:
+            for attribute in message.media.document.attributes:
+                if hasattr(attribute, 'file_name'):
+                    file_name = str(file_hash) + '-' +  attribute.file_name
+                    break
+        file_path = None
+        if check_valid_file_extension(file_name):
+            download_path = os.path.join(download_dir, file_name)
+            # Bắt đầu tải file từ message 
+            file_path = await client.download_media(
+                message.media,
+                file=download_path,
+                progress_callback=progress_callback
+            )
+            if file_path is not None:
+                append_line_to_file(history_downloaded, file_path)
+        return file_path
+            
+    except Exception as e:
+        print(f'Error during download: {str(e)} (utils.py:download_file_from_media:250)')
+        write_log(log_file_error, f'Error during download: {str(e)} (utils.py:download_file_from_media:251)\n')
+        return None
+    
+# Hàm kiểm tra định dạng của line
+def check_line_format(rules, line):
+
+    # Duyệt qua từng quy tắc trong danh sách
+    for rule in rules:
+        for rule_name, rule_pattern in rule.items():
+            x = re.findall(rule_pattern, line) 
+            if x:
+                return [rule_name, x]  # Trả về tên quy tắc đã khớp
+    return None  # Không có quy tắc nào khớp
+
+async def upload_data(elastic_client, index, doc):
+    response_elastic = elastic_client.index(index=index, id=str(uuid.uuid4()), document=doc)
+    print(f'Response elastic: {response_elastic} (utils.py:upload_data:267)')
+    write_log(log_file_run ,f'Response elastic: {response_elastic} (utils.py:upload_data:268)\n')
+
+def load_rules_from_yaml(rule_path):
+    with open(rule_path, 'r') as file:
+        rules = yaml.safe_load(file)
+    return rules['line_rules']
+
+link_rules='./rules/links.yaml'
+async def get_room_link_from_message(message):
+    text = message.message
+    if text is not None:
+        rules = load_rules_from_yaml(link_rules)
+        matches = check_line_format(rules, text)
+        if matches:
+        #     elastic_client = Elasticsearch(
+        #         [ELASTIC_URL],
+        #         api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
+        #         verify_certs=True,
+        #         ca_certs=ELASTIC_API_CACERT
+        #     )
+            for link in matches[1]:
+                print(f'Link: {link}')
+                write_log('./links.txt', link)
+        #         doc = {
+        #             'url': link,
+        #             'timestamp': datetime.now(),
+        #         }
+        #         await upload_data(elastic_client, 'link', doc)
+        #     elastic_client.close()
+    
+# Hàm đọc file
+async def read_file(file_path):
+    try:
+        result = None
+        # elastic_client = Elasticsearch(
+        #     [ELASTIC_URL],
+        #     api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
+        #     verify_certs=True,
+        #     ca_certs=ELASTIC_API_CACERT
+        # )
+        if os.path.isfile(file_path):
+
+            if not check_compress_file(file_path):
+                if not check_valid_file_extension(file_path):
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                file_hash = get_file_hash_after_download(file_path)
+                if check_file_in_history(history_read, file_hash):
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    return None
+                _, file_extension = os.path.splitext(file_path)
+                # if file_extension == '.txt':
+                #     await read_file_txt(file_path, elastic_client)
+                # elif file_extension == '.xlsx':
+                #     await read_table_xlsx(file_path, elastic_client)
+                # elif file_extension == '.csv':
+                #     await read_table_csv(file_path, elastic_client)
+                append_line_to_file(history_read, file_path)
+                result = True
+                print(f'Read file {file_path} (utils.py:read_file:325)')
+                write_log(log_file_run, f'Read file {file_path} (utils.py:read_file:326)\n')
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            else:  
+                # Đường dẫn giải nén
+                extract_dir = './storage/'
+                list_extract = await extract_file(file_path, extract_dir)
+                if list_extract:
+
+                    # Sau khi giải nén, đọc nội dung các file trong thư mục đã giải nén
+                    for extract_path_item in list_extract:
+                        item_path = os.path.join(extract_dir, extract_path_item)
+                        print(f'Item path: {item_path}')
+                        if await read_file(item_path):
+                            if os.path.exists(item_path):
+                                os.remove(item_path)
+                        
+
+                # Xóa file sau khi đã đọc và xử lý
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                print(f'File {file_path} has been processed and deleted. (utils.py:read_file:347)')
+                write_log(log_file_run ,f'File {file_path} has been processed and deleted. (utils.py:read_file:348)\n')
+
+        elif os.path.isdir(file_path):
+            for item in os.listdir(file_path):
+                item_path = os.path.join(file_path, item)
+                await read_file(item_path)
+                result = True
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            print(f'File {file_path} has been processed and deleted. (utils.py:read_file:357)')
+            write_log(log_file_run, f'File {file_path} has been processed and deleted. (utils.py:read_file:358)\n')
+    
+    except Exception as e:
+        print(f'Error: {e} (utils.py:read_file:361)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_file:362)\n')
+    finally:
+        # elastic_client.close()
+        return result
+    
+# Nhóm hàm đọc file 
+async def read_file_txt(file_path, elastic_client):
+    try: 
+        with open(file_path, 'r') as file_txt:
+            for line in file_txt:
+                line = line.strip()
+                doc = {
+                    'text': line,
+                    'timestamp': datetime.now(),
+                }
+                await upload_data(elastic_client, 'telegram_index', doc)
+    except Exception as e:
+        print(f'Error indexing document: {e} (utils.py:read_file_txt:379)')
+        write_log(log_file_error, f'Error indexing document: {str(e)}  (utils.py:read_file_txt:380)\n')
+
+# Đọc file xlsx
+async def read_table_xlsx(file_path, elastic_client):
+    try:
+        workbook = load_workbook(filename=file_path, data_only=True)
+        
+        sheet = workbook.active
+        
+        columns = [cell.value for cell in sheet[1]]
+        
+        
+        # Đọc và in dữ liệu từ các hàng
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            doc = dict(zip(columns, row))
+            await upload_data(elastic_client, 'telegram_index', doc)
+            
+        workbook.close()
+        return True
+    except FileNotFoundError:
+        print(f'Không tìm thấy file: {file_path} (utils.py:read_table_xlsx:400)')
+        write_log(log_file_error, f'File not found: {file_path} (utils.py:read_table_xlsx:401)\n')
+        return None
+    except Exception as e:
+        print(f'Có lỗi xảy ra: {str(e)} (utils.py:read_table_xlsx:404)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_table_xlsx:405)\n')
+        return None
+
+# Đọc file csv
+async def read_table_csv(file_path, elastic_client):
+    try:
+        with open(file_path, mode='r') as file:
+            reader = csv.reader(file)
+            headers = next(reader)
+            for row in reader:
+                # Tạo dictionary từ header và dữ liệu
+                doc = dict(zip(headers, row))
+                await upload_data(elastic_client, 'telegram_index', doc)
+        return True
+    except FileNotFoundError:
+        print(f'File not found: {file_path} (utils.py:read_table_csv:420)')
+        write_log(log_file_error, f'File not found: {file_path} (utils.py:read_table_csv:421)\n')
+        return None
+    except Exception as e:
+        print(f'Có lỗi xảy ra: {str(e)} (utils.py:read_table_csv:424)')
+        write_log(log_file_error, f'Error: {str(e)} (utils.py:read_table_csv:425)\n')
+        return None
+
+# get id 
+async def get_room_id(client):
+    list_room_ids = []
+    async for dialog in client.iter_dialogs():
+        entity = dialog.entity
+        name = dialog.name  
+        chat_id = dialog.id 
+        list_room_ids.append(chat_id)
+        # Phân loại loại chat
+        if getattr(entity, 'broadcast', False):
+            print(f'Kênh (Channel): {name} (ID: {chat_id}) (utils.py:get_room_id:438)')
+        elif getattr(entity, 'megagroup', False):
+            print(f'Nhóm (Group): {name} (ID: {chat_id}) (utils.py:get_room_id:440)')
+        elif getattr(entity, 'bot', False):
+            print(f'Bot: {name} (ID: {chat_id}) (utils.py:get_room_id:442)')
+        else:
+            print(f'Chat riêng (Private Chat): {name} (ID: {chat_id})  (utils.py:get_room_id:444)')
+    return list_room_ids
+
+
+# Hàm lấy entity của một đoạn chat
+async def get_channel_entity(client, chat_id):
+    try:
+        chat = None
+        if isinstance(chat_id, str):
+            if chat_id.startswith('-100'):
+                chat_id = int(chat_id[4:])
+            else:
+                chat_id = int(chat_id)
+        try:
+            chat = await client.get_entity(PeerChannel(chat_id))
+        except:
+            try:
+                chat = await client.get_entity(chat_id)
+            except Exception as e:
+                print(f'Error getting entity directly: {str(e)} (utils.py:get_channel_entity:463)')
+                write_log(log_file_error, f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:464)\n')
+                return None     
+        return chat
+        
+    except ValueError as e:
+        print(f'Invalid channel ID format: {str(e)} (utils.py:get_channel_entity:469)')
+        write_log(log_file_error, f'Invalid channel ID format: {str(e)} (utils.py:get_channel_entity:470)\n')
+        return None
+    except Exception as e:
+        print(f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:473)')
+        write_log(log_file_error, f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:474)\n')
+        return None
