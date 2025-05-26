@@ -1,2 +1,0 @@
-http://test.com:abc:abc
-http://test.com:abc:abc
