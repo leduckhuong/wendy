@@ -1,0 +1,9 @@
+line_rules:
+  - name: rule1
+    pattern: 'https?:\/\/[^\s:]+:[^\s:]+:[^\s]+'
+  - name: rule2
+    pattern: '[^\s:]+:https?:\/\/[^\s:]+:[^\s]+'
+  - name: rule3
+    pattern: '[^\s:]+:[^\s:]+:https?:\/\/[^\s:]+'
+  - name: rule4
+    pattern: '[^\s:]+:[^\s:]+'

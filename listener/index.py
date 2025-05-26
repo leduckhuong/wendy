@@ -1,8 +1,12 @@
+import sys
+import os
 import asyncio
 import configparser
 from telegram_listener import start
 
-from utils import write_log
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from libs import write_log
 
 config = configparser.ConfigParser()
 config.read('config.ini')

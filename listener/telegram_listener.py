@@ -1,3 +1,4 @@
+import sys
 import os
 import asyncio
 import configparser
@@ -5,14 +6,16 @@ from datetime import datetime
 from telethon import TelegramClient, events # type: ignore
 from telethon.tl.types import MessageMediaDocument # type: ignore
 
-from utils import ( 
-    get_file_hash_before_download, 
-    check_file_in_history, 
-    download_file_from_media,
-    get_room_link_from_message
-)
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from libs import write_log
+
+from utils import (
+    check_file_in_history,
+    download_file_from_media,
+    get_data_from_message
+)
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -53,20 +56,16 @@ history_downloaded = config['HISTORY']['HISTORY_DOWNLOADED_FILE']
 async def handle_newMessage_Client(event, client):
     try:
         message = event.message
-        print('Has received a new message.  (telegram_listener.py:handle_newMessage_Client:57)')
-        # if message is file
+       
         if isinstance(message.media, MessageMediaDocument):
-            file_hash = await get_file_hash_before_download(client, message)
-            if file_hash is None:
-                return 
-            if check_file_in_history(history_downloaded, file_hash):
-                return
-            await download_file_from_media(client, message, storage_dir, file_hash)
+            
+            if not check_file_in_history(message.media.document.size, message.media.document.attributes[0].file_name):
+                await download_file_from_media(client, message)
             # add delay 1 second between each file download
             await asyncio.sleep(1)
 
         else:
-            await get_room_link_from_message(message)
+            get_data_from_message(message.message)
                 
     except Exception as e:
         print(f'Error in event handler: {str(e)} (telegram_listener.py:handle_newMessage:73)')
