@@ -1,5 +1,5 @@
 import os
-import pyzipper
+import pyzipper # type: ignore
 import rarfile # type: ignore
 import py7zr # type: ignore
 from datetime import datetime
@@ -9,6 +9,8 @@ import re
 import yaml
 
 from telethon.tl.types import PeerChannel # type: ignore
+
+from libs import write_log
 
 
 config = configparser.ConfigParser()
@@ -23,11 +25,6 @@ log_file_run = config['LOGGING']['LOG_FILE_RUN']
 log_file_error = config['LOGGING']['LOG_FILE_ERROR']
 
 white_file_types = config['WHITELIST']['WHITELIST_FILE_TYPES']
-
-def write_log(file_path, log):
-    if os.path.exists(file_path):
-        with open(file_path, 'a') as f:
-            f.write(f'{log}\n')
 
 
 async def get_file_hash_before_download(client, message):
@@ -245,81 +242,3 @@ def check_line_format(rules, line):
                 return [rule_name, x]  # Trả về tên quy tắc đã khớp
     return None  # Không có quy tắc nào khớp
 
-# Hàm tải quy tắc từ file yaml dành cho fetch_previous_messages.py
-def load_rules_from_yaml(rule_path):
-    with open(rule_path, 'r') as file:
-        rules = yaml.safe_load(file)
-    return rules['line_rules']
-
-# Hàm lấy link từ message dành cho fetch_previous_messages.py
-link_rules=config['RULES']['LINK_RULES']
-async def get_room_link_from_message(message):
-    text = message.message
-    if text is not None:
-        rules = load_rules_from_yaml(link_rules)
-        matches = check_line_format(rules, text)
-        if matches:
-        #     elastic_client = Elasticsearch(
-        #         [ELASTIC_URL],
-        #         api_key=ELASTIC_API_KEY,  # Thay bằng API key bạn vừa tạo
-        #         verify_certs=True,
-        #         ca_certs=ELASTIC_API_CACERT
-        #     )
-            for link in matches[1]:
-                print(f'Link: {link}')
-                write_log('./links.txt', link)
-        #         doc = {
-        #             'url': link,
-        #             'timestamp': datetime.now(),
-        #         }
-        #         await upload_data(elastic_client, 'link', doc)
-        #     elastic_client.close()
-
-# get id dành cho fetch_previous_messages.py
-async def get_room_id(client):
-    list_room_ids = []
-    async for dialog in client.iter_dialogs():
-        entity = dialog.entity
-        name = dialog.name  
-        chat_id = dialog.id 
-        list_room_ids.append(chat_id)
-        # Phân loại loại chat
-        if getattr(entity, 'broadcast', False):
-            print(f'Kênh (Channel): {name} (ID: {chat_id}) (utils.py:get_room_id:438)')
-        elif getattr(entity, 'megagroup', False):
-            print(f'Nhóm (Group): {name} (ID: {chat_id}) (utils.py:get_room_id:440)')
-        elif getattr(entity, 'bot', False):
-            print(f'Bot: {name} (ID: {chat_id}) (utils.py:get_room_id:442)')
-        else:
-            print(f'Chat riêng (Private Chat): {name} (ID: {chat_id})  (utils.py:get_room_id:444)')
-    return list_room_ids
-
-
-# Hàm lấy entity của một đoạn chat dành cho fetch_previous_messages.py
-async def get_channel_entity(client, chat_id):
-    try:
-        chat = None
-        if isinstance(chat_id, str):
-            if chat_id.startswith('-100'):
-                chat_id = int(chat_id[4:])
-            else:
-                chat_id = int(chat_id)
-        try:
-            chat = await client.get_entity(PeerChannel(chat_id))
-        except:
-            try:
-                chat = await client.get_entity(chat_id)
-            except Exception as e:
-                print(f'Error getting entity directly: {str(e)} (utils.py:get_channel_entity:463)')
-                write_log(log_file_error, f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:464)\n')
-                return None     
-        return chat
-        
-    except ValueError as e:
-        print(f'Invalid channel ID format: {str(e)} (utils.py:get_channel_entity:469)')
-        write_log(log_file_error, f'Invalid channel ID format: {str(e)} (utils.py:get_channel_entity:470)\n')
-        return None
-    except Exception as e:
-        print(f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:473)')
-        write_log(log_file_error, f'Error accessing channel: {str(e)} (utils.py:get_channel_entity:474)\n')
-        return None

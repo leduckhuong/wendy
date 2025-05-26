@@ -6,13 +6,13 @@ from telethon import TelegramClient, events # type: ignore
 from telethon.tl.types import MessageMediaDocument # type: ignore
 
 from utils import ( 
-    write_log,
     get_file_hash_before_download, 
     check_file_in_history, 
-    download_file_from_media, 
-    read_file, 
+    download_file_from_media,
     get_room_link_from_message
 )
+
+from libs import write_log
 
 config = configparser.ConfigParser()
 config.read('config.ini')
