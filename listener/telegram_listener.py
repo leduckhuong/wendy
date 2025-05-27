@@ -1,20 +1,17 @@
-import sys
 import os
 import asyncio
 import configparser
 from datetime import datetime
+import redis # type: ignore
 from telethon import TelegramClient, events # type: ignore
 from telethon.tl.types import MessageMediaDocument # type: ignore
 
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from libs import write_log
-
 from utils import (
     check_file_in_history,
     download_file_from_media,
-    get_data_from_message
+    write_log,
+    get_data_from_text
 )
 
 config = configparser.ConfigParser()
@@ -53,6 +50,8 @@ os.makedirs(storage_dir, exist_ok=True)
 
 history_downloaded = config['HISTORY']['HISTORY_DOWNLOADED_FILE']
 
+r = redis.Redis()
+
 async def handle_newMessage_Client(event, client):
     try:
         message = event.message
@@ -60,12 +59,14 @@ async def handle_newMessage_Client(event, client):
         if isinstance(message.media, MessageMediaDocument):
             
             if not check_file_in_history(message.media.document.size, message.media.document.attributes[0].file_name):
-                await download_file_from_media(client, message)
+                file_path = await download_file_from_media(client, message)
+                if file_path is not None:
+                    r.publish("file_channel", file_path)
             # add delay 1 second between each file download
             await asyncio.sleep(1)
 
         else:
-            get_data_from_message(message.message)
+            get_data_from_text(message.message)
                 
     except Exception as e:
         print(f'Error in event handler: {str(e)} (telegram_listener.py:handle_newMessage:73)')

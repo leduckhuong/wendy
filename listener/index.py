@@ -1,12 +1,11 @@
-import sys
 import os
 import asyncio
 import configparser
 from telegram_listener import start
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from libs import write_log
+from utils import (
+    write_log
+)
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -20,8 +19,6 @@ async def main():
         await start()
     except Exception as e:
         write_log(log_file_error, f'Error: {str(e)} (index.py:main:19)\n')
-    else:
-        write_log(log_file_run, f'Listener started(index.py:main:21)\n')
 
 
 if __name__ == '__main__':

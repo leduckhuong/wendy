@@ -1,3 +1,1 @@
-../storage/510-test1.txt
-../storage/370-test2.txt
-../storage/43551-🜲 HOTMAIL 🜲.txt
+../storage/2162-test1.zip

@@ -6,4 +6,4 @@ line_rules:
   - name: rule3
     pattern: '[^\s:]+:[^\s:]+:https?:\/\/[^\s:]+'
   - name: rule4
-    pattern: '[^\s:]+:[^\s:]+'
+    pattern: '[^https?\s:]+:[^\s:]+'
