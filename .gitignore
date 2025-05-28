@@ -1,5 +1,8 @@
 */__pycache__/
 */logs/*
-./listener/sessions/
-./storage/*
-./dist/*
+listener/sessions/
+storage/*
+dist/*
+*/node_modules/
+*/package-lock.json
+*/.env
