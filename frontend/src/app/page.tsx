@@ -2,8 +2,11 @@
 
 export default function Home() {
   return (
-    <div>
-      <h1>Nextjs</h1>
-    </div>
+    <>
+      <link rel="stylesheet" href="/css/index.css" />
+      <div id="main" className="container mx-auto mt-14 px-4">
+        test
+      </div>
+    </>
   );
 }
