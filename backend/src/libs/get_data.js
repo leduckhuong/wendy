@@ -24,25 +24,34 @@ const insertData = async (text) => {
     await pool.query(query);
 }
 
-const reader = async () => {
-    try {
+const reader = () => {
+    return new Promise((resolve, reject) => {
         if (!fs.existsSync(file_path)) {
-            return
+            return reject({ fn: 'BadParameters', message: 'This file does not exist!' });
         }
+
         const rl = readline.createInterface({
             input: fs.createReadStream(file_path),
-            crlfDelay: Infinity // Support \r\n và \n
+            crlfDelay: Infinity
         });
 
-        for await (const line of rl) {
-            await insertData(line);
-        }
+        rl.on('error', (err) => {
+            reject(err);
+        });
 
-        console.log("Done reading file.");
-    } catch (error) {
-        console.error("Read file error!");
-        console.error(error);
-    }
+        (async () => {
+            try {
+                for await (const line of rl) {
+                    await insertData(line);
+                }
+                resolve("Read file success!");
+            } catch (err) {
+                reject(err);
+            } finally {
+                rl.close(); 
+            }
+        })();
+    });
 };
 
 module.exports = { reader };

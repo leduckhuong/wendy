@@ -1,6 +1,9 @@
+const Response = require('../libs/httpResponse');
+
 class Index {
     index(req, res) {
-        res.send('OK');
+        const msg = "Ok";
+        return Response.Ok(res, msg);
     }
 }
 
