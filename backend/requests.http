@@ -27,6 +27,6 @@ Content-Type: application/json
 
 {
     "username": "root",
-    "password": "root" 
+    "password": "Abc@12345" 
 }
 
