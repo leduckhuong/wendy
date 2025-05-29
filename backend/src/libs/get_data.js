@@ -15,11 +15,10 @@ const formatted = `${yyyy}-${mm}-${dd}`;
 
 const file_path = `${path.join(__dirname, data_path)}/${formatted}.txt`;
 
-const dbDataTable = process.env.DB_DATA_TABLE;
 
 const insertData = async (text) => {
     const query = `
-        INSERT INTO ${dbDataTable} (data) VALUES ('${text}');
+        INSERT INTO data_v1 (data) VALUES ('${text}');
     `;
     await pool.query(query);
 }

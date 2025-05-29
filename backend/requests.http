@@ -1,4 +1,32 @@
 @HOST=http://127.0.0.1:4242
 
+
 # Get /
 GET {{HOST}}/
+
+###===== Reader
+### GET /reader
+GET {{HOST}}/api/reader
+
+
+
+###===== User
+###POST /user/init
+POST {{HOST}}/api/user/init
+Content-Type: application/json
+
+{
+    "username": "root",
+    "password": "Abc@12345"
+}
+
+
+### POST /user/token
+POST {{HOST}}/api/user/token
+Content-Type: application/json
+
+{
+    "username": "root",
+    "password": "root" 
+}
+

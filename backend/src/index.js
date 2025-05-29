@@ -13,6 +13,9 @@ const route = require('./routes/index.route');
 
 connect();
 
+app.use(express.json());
+app.use(express.urlencoded({extended: true}));
+
 route(app);
 
 app.listen(port, () => {
