@@ -1,8 +1,7 @@
 export default function Header() {
   return (
     <div>
-      <link rel="stylesheet" href="/css/header.css" />
-      <link rel="stylesheet" href="/css/hamburger.css" />
+      <link rel="stylesheet" href="/css/custom.css" />
       <header
         id="header"
         className="h-14 w-full backdrop-blur fixed top-0 left-0 right-0 z-50 border-cyan-900 border-b border-solid"
@@ -10,8 +9,10 @@ export default function Header() {
         <div className="max-w-screen-xl h-full mx-auto px-2 lg:px-0 flex items-center justify-between">
           <div className="header__logo">
             <a href="/" className="flex justify-center items-center h-full">
-              <img className="h-16" src="/imgs/2620337.png" />
-              <span className="ml-4 text-3xl font-semibold">WENDY</span>
+              <img className="h-12" src="/imgs/2620337.png" />
+              <span className="ml-4 text-2xl font-semibold gradient-text">
+                WENDY
+              </span>
             </a>
           </div>
           <div className="header__nav">
@@ -57,9 +58,9 @@ export default function Header() {
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                       className="w-6 h-6"
                     >
                       <path
@@ -75,8 +76,8 @@ export default function Header() {
                   <span className="hidden dark:inline">
                     <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
                       <path
-                        fill-rule="evenodd"
-                        clip-rule="evenodd"
+                        fillRule="evenodd"
+                        clipRule="evenodd"
                         d="M17.715 15.15A6.5 6.5 0 0 1 9 6.035C6.106 6.922 4 9.645 4 12.867c0 3.94 3.153 7.136 7.042 7.136 3.101 0 5.734-2.032 6.673-4.853Z"
                         className="fill-transparent"
                       ></path>
@@ -85,19 +86,15 @@ export default function Header() {
                         className="fill-slate-400 dark:fill-slate-500"
                       ></path>
                       <path
-                        fill-rule="evenodd"
-                        clip-rule="evenodd"
+                        fillRule="evenodd"
+                        clipRule="evenodd"
                         d="M17 3a1 1 0 0 1 1 1 2 2 0 0 0 2 2 1 1 0 1 1 0 2 2 2 0 0 0-2 2 1 1 0 1 1-2 0 2 2 0 0 0-2-2 1 1 0 1 1 0-2 2 2 0 0 0 2-2 1 1 0 0 1 1-1Z"
                         className="fill-slate-400 dark:fill-slate-500"
                       ></path>
                     </svg>
                   </span>
                 </button>
-                <a
-                  href="https://github.com/tailwindlabs/tailwindcss"
-                  className="ml-6 block text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
-                >
-                  <span className="sr-only">Tailwind CSS on GitHub</span>
+                <a className="ml-6 block text-slate-400 hover:text-slate-500 dark:hover:text-slate-300">
                   <svg
                     viewBox="0 0 16 16"
                     className="w-5 h-5"
