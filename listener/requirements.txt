@@ -1,1 +1,4 @@
-This is the file content
+telethon==1.37.0
+redis==5.2.0
+PyYAML==6.0.2
+asyncio

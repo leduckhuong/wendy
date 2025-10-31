@@ -11,9 +11,8 @@ const pool = new Pool({
 const createTableQueries = [
     `CREATE TABLE IF NOT EXISTS data_v1 (
         id SERIAL PRIMARY KEY,
-        username TEXT,
-        password TEXT,
-        refreshTokens TEXT
+        data TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );`,
     `CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,

@@ -18,9 +18,9 @@ const file_path = `${path.join(__dirname, data_path)}/${formatted}.txt`;
 
 const insertData = async (text) => {
     const query = `
-        INSERT INTO data_v1 (data) VALUES ('${text}');
+        INSERT INTO data_v1 (data) VALUES ($1);
     `;
-    await pool.query(query);
+    await pool.query(query, [text]);
 }
 
 const reader = () => {

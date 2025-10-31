@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const Response = require('../libs/httpResponse');
 const passwordpolicy = require('../libs/passwordpolicy');
 const UserModel = require('../models/User.model');
+const auth = require('../libs/auth');
 
 
 class User {
@@ -55,6 +56,29 @@ class User {
             }
         })
         .catch(err => Response.Internal(res, err))
+    }
+
+    verify(req, res) {
+        if (!req.cookies['token']) {
+            return Response.Unauthorized(res, 'No token provided');
+        }
+
+        const cookie = req.cookies['token'].split(' ');
+        if (cookie.length !== 2 || cookie[0] !== 'JWT') {
+            return Response.Unauthorized(res, 'Bad token type');
+        }
+
+        const token = cookie[1];
+        jwt.verify(token, auth.jwtSecret, (err, decoded) => {
+            if (err) {
+                if (err.name === 'TokenExpiredError') {
+                    return Response.Unauthorized(res, 'Expired token');
+                } else {
+                    return Response.Unauthorized(res, 'Invalid token');
+                }
+            }
+            return Response.Ok(res, { user: decoded });
+        });
     }
 }
 
