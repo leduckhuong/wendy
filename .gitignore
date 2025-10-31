@@ -123,6 +123,8 @@ dist/
 extract/
 sessions/
 listener/sessions/
+config.ini
+listener/config.ini
 history_downloaded.txt
 history_read.txt
 
