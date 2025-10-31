@@ -122,6 +122,7 @@ storage/
 dist/
 extract/
 sessions/
+listener/sessions/
 history_downloaded.txt
 history_read.txt
 
